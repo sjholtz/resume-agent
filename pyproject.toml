@@ -1,0 +1,22 @@
+[project]
+name = "resume-agent"
+version = "0.1.0"
+description = "An agent-based system to develop résumés and cover letters."
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "deepagents>=0.7.32",
+    "dotenv>=0.9.9",
+    "langchain-ollama>=1.1.0",
+    "langchain-quickjs>=0.3.11",
+    "langsmith>=0.4.0",
+    "pymupdf>=2.1",
+    "searxng-wrapper>=0.1.1",
+    "trafilatura>=2.3.1",
+]
+
+[dependency-groups]
+dev = [
+    "ruff>=0.17.3",
+    "ty>=0.0.95",
+]

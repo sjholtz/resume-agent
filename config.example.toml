@@ -1,0 +1,14 @@
+schema_version = 1
+
+[storage]
+# Edit to point to an existing directory containing candidate documents.
+# Use an absolute path or a path beginning with ~.
+candidate_root = "/home/your-user/Documents/career"
+
+[behavior]
+# If no override, configured workspace, or marked CWD is available, ask for
+# the candidate root when running in an interactive terminal.
+prompt_if_missing = true
+
+# Accept the current directory only if .resume-agent-workspace is present.
+allow_cwd_workspace = true

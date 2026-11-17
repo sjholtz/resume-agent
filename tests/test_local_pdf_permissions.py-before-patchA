@@ -1,0 +1,70 @@
+"""First-match write rules for immutable original candidate documents."""
+
+import sys
+from pathlib import Path
+from types import ModuleType
+import unittest
+from unittest.mock import patch
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from permissions import make_permissions
+
+ROLES = (
+    "orchestrator", "candidate-profile-agent", "application-agent",
+    "technical-review-agent", "recruiting-ats-review-agent",
+)
+
+
+class FakePermission:
+    def __init__(self, *, operations, paths, mode="allow"):
+        self.operations, self.paths, self.mode = operations, paths, mode
+
+
+def evaluate(rules, path, operation):
+    for rule in rules:
+        if operation not in rule.operations:
+            continue
+        for pattern in rule.paths:
+            if pattern == path or (pattern.endswith("/**") and path.startswith(pattern[:-3] + "/")):
+                return rule.mode
+    return "allow"
+
+
+class OriginalDocumentsPolicyTests(unittest.TestCase):
+    def setUp(self):
+        fake = ModuleType("deepagents")
+        fake.FilesystemPermission = FakePermission
+        stub = patch.dict(sys.modules, {"deepagents": fake})
+        stub.start()
+        self.addCleanup(stub.stop)
+
+    def test_original_documents_immutable_to_all_roles(self):
+        root = "/workspace/candidate/evidence/sources/documents"
+        for role in ROLES:
+            rules = make_permissions(role)
+            with self.subTest(role=role):
+                self.assertEqual(evaluate(rules, root, "write"), "deny")
+                self.assertEqual(evaluate(rules, root + "/thesis.pdf", "write"), "deny")
+                self.assertEqual(evaluate(rules, root + "/nested/a.pdf", "write"), "deny")
+                self.assertEqual(evaluate(rules, root + "/thesis.pdf", "read"), "allow")
+
+    def test_owner_can_approve_metadata_but_not_original_pdf(self):
+        rules = make_permissions("candidate-profile-agent")
+        self.assertEqual(evaluate(rules, "/workspace/candidate/evidence/source_records/SRC-0001.yaml", "write"), "interrupt")
+        self.assertEqual(evaluate(rules, "/workspace/candidate/profile/education.md", "write"), "interrupt")
+        self.assertEqual(evaluate(rules, "/workspace/candidate/evidence/sources/documents/a.pdf", "write"), "deny")
+
+    def test_other_agents_keep_original_write_rules(self):
+        self.assertEqual(evaluate(make_permissions("application-agent"), "/workspace/applications/cv.md", "write"), "interrupt")
+        self.assertEqual(evaluate(make_permissions("candidate-profile-agent"), "/workspace/applications/cv.md", "write"), "deny")
+
+    def test_custom_prefix_for_immutable_subtree(self):
+        prefix = "/workspace/profiles/primary"
+        for role in ROLES:
+            rules = make_permissions(role, candidate_profile=prefix)
+            self.assertEqual(evaluate(rules, prefix + "/evidence/sources/documents/a.pdf", "write"), "deny")
+            self.assertEqual(evaluate(rules, prefix + "/evidence/sources/documents/a.pdf", "read"), "allow")
+
+
+if __name__ == "__main__":
+    unittest.main()
