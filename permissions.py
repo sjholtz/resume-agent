@@ -130,6 +130,7 @@ def make_permissions(role: Role, *, candidate_profile: str | None = None):
                 operations=["write"],
                 paths=[
                     f"/workspace/applications/*/{_DATE_COMPONENT}/.latex_source_manifest.json",
+                    f"/workspace/applications/*/{_DATE_COMPONENT}/claim_audit.md",
                     f"/workspace/applications/*/{_DATE_COMPONENT}/build",
                     f"/workspace/applications/*/{_DATE_COMPONENT}/build/**",
                 ],

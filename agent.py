@@ -67,17 +67,17 @@ def make_graph(*, checkpointer=None, base_resume: str | None = None, base_cover:
         register_harness_profile,
     )
     from langchain_core._api.beta_decorator import LangChainBetaWarning
-
     # from langchain_quickjs import CodeInterpreterMiddleware
     from langgraph.checkpoint.memory import InMemorySaver
 
     from models import strong_model
-    from pdf_read_guard import PdfReadGuardMiddleware
     from profile_receipt_middleware import profile_task_receipt_middleware
-    from tools.read_local_pdf import make_read_local_pdf_tool
+    from pdf_read_guard import PdfReadGuardMiddleware
     from tools.read_web_page import read_web_page
     from tools.read_web_pdf import read_web_pdf
+    from tools.read_local_pdf import make_read_local_pdf_tool
     from tools.search import web_search
+    from tools.check_claim_audit import make_check_claim_audit_tool
 
     warnings.filterwarnings("ignore", category=LangChainBetaWarning)
 
@@ -112,6 +112,8 @@ def make_graph(*, checkpointer=None, base_resume: str | None = None, base_cover:
             read_web_page,
             read_web_pdf,
             local_pdf_reader,
+            make_check_claim_audit_tool(
+                workspace_root=config.workspace_root, candidate_profile=profile),
         ],
         interrupt_on=RESEARCH_INTERRUPT_ON,
         checkpointer=checkpointer if checkpointer is not None else InMemorySaver(),
@@ -132,7 +134,7 @@ def make_graph(*, checkpointer=None, base_resume: str | None = None, base_cover:
         ),
         backend=backend,
         middleware=[
-            #     CodeInterpreterMiddleware(),
+        #     CodeInterpreterMiddleware(),
             profile_task_receipt_middleware,
             PdfReadGuardMiddleware(),
         ],

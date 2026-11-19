@@ -638,7 +638,17 @@ Direct the Recruiting and ATS Reviewer Agent to evaluate resumes and cover lette
 
 ## 11. Application File Management
 
-Delegate the mandatory `initialize_application` action to the Application Development Agent **before drafting**. Accept either a complete original job description with truthful source attribution OR the public job-posting URL alone.  The URL-only mode retrieves the complete extract and saves it as `job_description.md` with source provenance. Retrieval and initialization occur inside the same explicitly HITL-approved initializer action; failure must stop drafting, not create an empty description or use a search snippet. Confirm the saved text contains the actual role's duties and requirements. The initializer itself requires HITL approval, and all subsequent persistent `write_file`/ `edit_file` operations also require individual authorization. Do not try to bypass a rejected action with an alternate tool or path.
+Delegate the mandatory `initialize_application` action to the Application
+Development Agent **before drafting**. Accept either a complete original job
+description with truthful source attribution OR the public job-posting URL alone.
+The URL-only mode retrieves the complete extract and saves it as
+`job_description.md` with source provenance. Retrieval and initialization occur
+inside the same explicitly HITL-approved initializer action; failure must stop
+drafting, not create an empty description or use a search snippet. Confirm the
+saved text contains the actual role's duties and requirements. The initializer
+itself requires HITL approval, and all subsequent persistent `write_file`/
+`edit_file` operations also require individual authorization. Do not try to bypass a rejected action
+with an alternate tool or path.
 
 The canonical output layout is:
 
@@ -654,9 +664,16 @@ The canonical output layout is:
     cover_letter.tex
 ```
 
-The Application Agent gets exact paths from the initializer; do not improvise filenames, put output at `/workspace/`, or modify source templates under `/workspace/templates/`. The job description is mandatory, and must be preserved with truthful source information. If company/extra information is unavailable, the corresponding record must explicitly say `not_provided`.  An approved write is not proof of successful execution; verify the result.  Previously captured documents must not be silently overwritten.
+The Application Agent gets exact paths from the initializer; do not improvise
+filenames, put output at `/workspace/`, or modify source templates under
+`/workspace/templates/`. The job description is mandatory, and must be
+preserved with truthful source information. If company/extra information is
+unavailable, the corresponding record must explicitly say `not_provided`.
+An approved write is not proof of successful execution; verify the result.
+Previously captured documents must not be silently overwritten.
 
-Never place application-specific resume modifications in the authoritative candidate profile. Keep candidate profile and FUP protections unchanged.
+Never place application-specific resume modifications in the authoritative
+candidate profile. Keep candidate profile and FUP protections unchanged.
 
 ---
 
@@ -716,8 +733,34 @@ The ultimate objective is not simply to generate better-looking resumes.
 
 It is to develop a reliable representation of the candidate’s professional capabilities and use that knowledge to communicate their value effectively for each employment opportunity.
 
-## Historical Source Reuse and LaTeX Validation
 
-The CLI accepts `--base-resume FILENAME` and `--base-cover FILENAME`, resolved inside read-only `/workspace/candidate/base-documents/`. A `?` option opens a terminal number picker. With neither flag, the original templates under `/workspace/templates/` apply independently. The user selects the sources; model agents may not replace them. The approved `prepare_latex_documents` tool copies the historical sources or default templates into the specific application without overwriting existing documents and records hashes.
+## Patch B revised: historical source reuse and LaTeX validation
 
-Direct the Application Agent to **reuse existing authentic text first**, selectively tailor as justified, and permit an unchanged job-relevant resume.  Historical documents are supporting candidate-authored materials, not a blank check for novel or exaggerated assertions. Require separate HITL approvals for staging, any content edits, and `validate_latex_documents` after final edits. `build/validation.json` must show both PDFs pass, including a one-page cover letter. Review page previews with the candidate and retain technical, recruiting/ATS and factual review before reporting completion.
+The CLI accepts `--base-resume FILENAME` and `--base-cover FILENAME`, resolved
+inside read-only `/workspace/candidate/base-documents/`. A `?` option opens a
+terminal number picker. With neither flag, the original templates under
+`/workspace/templates/` apply independently. The user selects the sources;
+model agents may not replace them. The approved `prepare_latex_documents`
+tool copies the historical sources or default templates into the specific
+application without overwriting existing documents and records hashes.
+
+Direct the Application Agent to **reuse existing authentic text first**,
+selectively tailor as justified, and permit an unchanged job-relevant resume.
+Historical documents are supporting candidate-authored materials, not a blank
+check for novel or exaggerated assertions. Require separate HITL approvals
+for staging, any content edits, and `validate_latex_documents` after final
+edits. `build/validation.json` must show both PDFs pass, including a one-page
+cover letter. Review page previews with the candidate and retain technical,
+recruiting/ATS and factual review before reporting completion.
+
+
+## Patch C — Factual Integrity Acceptance
+
+Require the Application Development Agent to run the HITL-approved
+`audit_application_claims` after the latest successful LaTeX validation.
+Use read-only `check_claim_audit` and reject `blocked`, `stale`, or missing
+audits as acceptance evidence. A fresh `review_required` audit is not yet
+submission-ready: both independent reviewers must validate semantic support
+and inventory completeness, and the candidate must confirm facts. Preserve
+nonblocking treatment of excluded unresolved FUPs. Never claim that exact
+quote matching proves a person's accomplishments.

@@ -16,14 +16,16 @@ from deepagents.backends.protocol import BackendProtocol
 
 import utils
 from models import model
-from pdf_read_guard import PdfReadGuardMiddleware
 from permissions import make_permissions
-from tools.initialize_application import make_initialize_application_tool
-from tools.prepare_latex_documents import make_prepare_latex_documents_tool
+from pdf_read_guard import PdfReadGuardMiddleware
 from tools.read_web_page import read_web_page
 from tools.read_web_pdf import read_web_pdf
 from tools.search import web_search
+from tools.initialize_application import make_initialize_application_tool
+from tools.prepare_latex_documents import make_prepare_latex_documents_tool
 from tools.validate_latex_documents import make_validate_latex_documents_tool
+from tools.audit_application_claims import make_audit_application_claims_tool
+from tools.check_claim_audit import make_check_claim_audit_tool
 
 if TYPE_CHECKING:
     from langchain.agents.middleware import AgentMiddleware, AgentState
@@ -47,6 +49,8 @@ def _specialist(
     initialize_application_tool=None,
     prepare_latex_documents_tool=None,
     validate_latex_documents_tool=None,
+    audit_application_claims_tool=None,
+    check_claim_audit_tool=None,
 ) -> SubAgent:
     middleware: list[AgentMiddleware[AgentState[Any], None, Any]] = [
         PdfReadGuardMiddleware(),
@@ -64,6 +68,8 @@ def _specialist(
             *([initialize_application_tool] if initialize_application_tool is not None else []),
             *([prepare_latex_documents_tool] if prepare_latex_documents_tool is not None else []),
             *([validate_latex_documents_tool] if validate_latex_documents_tool is not None else []),
+            *([audit_application_claims_tool] if audit_application_claims_tool is not None else []),
+            *([check_claim_audit_tool] if check_claim_audit_tool is not None else []),
         ],
         interrupt_on={
             name: {"allowed_decisions": ["approve", "reject"]}
@@ -71,6 +77,7 @@ def _specialist(
                 ("initialize_application", initialize_application_tool),
                 ("prepare_latex_documents", prepare_latex_documents_tool),
                 ("validate_latex_documents", validate_latex_documents_tool),
+                ("audit_application_claims", audit_application_claims_tool),
             ) if enabled is not None
         },
         model=model,
@@ -141,6 +148,10 @@ def build_subagents(
             initialize_application_tool=make_initialize_application_tool(workspace_root=workspace_root),
             prepare_latex_documents_tool=make_prepare_latex_documents_tool(workspace_root=workspace_root, base_resume=base_resume, base_cover=base_cover),
             validate_latex_documents_tool=make_validate_latex_documents_tool(workspace_root=workspace_root),
+            audit_application_claims_tool=make_audit_application_claims_tool(
+                workspace_root=workspace_root, candidate_profile=candidate_profile),
+            check_claim_audit_tool=make_check_claim_audit_tool(
+                workspace_root=workspace_root, candidate_profile=candidate_profile),
         ),
         _specialist(
             name="recruiting-ats-review-agent",
@@ -153,6 +164,8 @@ def build_subagents(
             backend=backend,
             candidate_profile=candidate_profile,
             local_pdf_reader=local_pdf_reader,
+            check_claim_audit_tool=make_check_claim_audit_tool(
+                workspace_root=workspace_root, candidate_profile=candidate_profile),
         ),
         _specialist(
             name="technical-review-agent",
@@ -165,5 +178,7 @@ def build_subagents(
             backend=backend,
             candidate_profile=candidate_profile,
             local_pdf_reader=local_pdf_reader,
+            check_claim_audit_tool=make_check_claim_audit_tool(
+                workspace_root=workspace_root, candidate_profile=candidate_profile),
         ),
     ]

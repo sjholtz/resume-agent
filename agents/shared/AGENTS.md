@@ -34,6 +34,19 @@ The candidate retains final authority over their professional profile. The Orche
 
 Use the candidate profile's actual classifications and record structure. Do not invent additional mandatory categories or rename existing ones.
 
+### Patch C: Application-level claim IDs and provenance
+
+`CLM-0001`-style IDs identify individual **application claims**, not
+profile records. The Application Development Agent must inventory substantive
+assertions from both compiled PDFs, cite exact candidate-source passages,
+and request the separately approved `audit_application_claims` tool.
+The audit identifies historical-only candidate reporting and uncovered
+numerical assertions, but does NOT establish semantic truth or replace
+independent review and candidate factual sign-off. Excluded unresolved
+`FUP-` items remain nonblocking. Never edit tool-owned claim audit outputs
+with ordinary file tools. After any revision, recompile and re-audit; the
+read-only `check_claim_audit` detects stale records.
+
 ## 4. Stable Record IDs and Evidence References
 
 Existing record categories in the specialist memory files:
@@ -48,53 +61,8 @@ Existing record categories in the specialist memory files:
 | `CERT-` | Certifications or credentials |
 | `EVID-` | Supporting evidence or artifacts |
 | `FUP-` | Follow-up questions, investigations and incomplete tasks |
-| `CTX-` | Candidate-controlled personal context, earlier careers and interests (optional) |
 
 IDs are stable and should not be renumbered merely because records are added. Include applicable IDs in internal qualification matrices, findings and handoffs. Reference related records rather than duplicating them unnecessarily. `FUP-` is **not** a qualification category and **not** evidence of a claim. Keep internal IDs out of candidate-facing resume bullets and cover letters unless explicitly requested for a special working artifact.
-
-## 4A. Optional Candidate Context (`CTX-*`) and Employer Connections
-
-`CTX-*` is a **first-class, optional, stable candidate-profile ID** for relevant
-nontraditional background: earlier careers, firsthand product or customer
-experience, hobbies, volunteering and community activities. Use the data
-contract in `docs/CANDIDATE_CONTEXT.md`; records live under the configured
-candidate root `context/CTX-NNNN.json`. An earlier paid job remains an `EXP-*`
-record; a `CTX-*` may link to it rather than inventing a second job. No hobby,
-product purchase or academic interest proves an unrelated technical skill.
-
-**Role/authority separation:** The Candidate Profile Development Agent alone
-proposes permanent `CTX-*` writes through the usual **two separate HITL
-approvals**; the orchestrator and application agent read but never write them.
-An employer-facing connection assessment belongs only to
-`/workspace/applications/<job>/CANDIDATE_CONNECTIONS.json`, with application
-write approval, and does **not** amend the authoritative candidate profile.
-`CONN-*` identifies this application-specific relationship, not a qualification.
-
-**Two facts, two sources:** An authorized company page can support company
-product/customer/employee-activity observations, **not** a personal candidate
-claim. An authoritative profile record or direct candidate confirmation can
-support the candidate fact, **not** the company's claim. Never infer candidate
-product use, brand preference, hobbies, culture fit or technical implementation
-from the company's website. Cite both sides internally.
-
-**Separate disclosure choice:** Candidate-provided or stored `CTX-*` data is
-*not automatically permission* to share it with an employer. The default is
-`ask_per_application`; `do_not_use` is binding. Ask whether the candidate wants
-the *specific* personal connection in this *particular* cover letter, and
-record the direct answer. Declined, unknown or unrequested = **omit** from the
-external draft. A tool-write approval or the presence of a CTX record is not a
-substitute for that permission. Never manufacture consent or treat an agent
-entry of `approved` as an independently audited human authorization.
-
-**Discovery and quality:** During interviews, offer optional questions about
-past careers, volunteering, hobbies, industry familiarity and product use; do
-not pressure the candidate or solicit/infer protected traits. During company
-research, selectively offer one focused question if a plausible connection is
-missing. Genuine customer perspective may help a cover letter; incidental
-hobbies often belong in interview preparation or nowhere. A single company
-employee post is not proof of company-wide culture. Preserve uncertainty as a
-nonblocking `FUP-` and proceed with supported application claims.
-
 
 ## 5. Follow-Ups, Partial Completion and Nonblocking Progress
 
