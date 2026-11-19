@@ -50,7 +50,7 @@ RESEARCH_INTERRUPT_ON: dict[str, bool | InterruptOnConfig] = {
 }
 
 
-def make_graph(*, checkpointer=None):
+def make_graph(*, checkpointer=None, base_resume: str | None = None, base_cover: str | None = None):
     """Build a new graph for the current workspace (default: /workspace in \
     jail).
 
@@ -121,6 +121,8 @@ def make_graph(*, checkpointer=None):
             candidate_profile=profile,
             local_pdf_reader=local_pdf_reader,
             workspace_root=config.workspace_root,
+            base_resume=base_resume,
+            base_cover=base_cover,
         ),
         skills=utils.get_skill_sources("orchestrator"),
         memory=utils.get_memory_sources("orchestrator"),

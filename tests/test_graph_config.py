@@ -98,6 +98,18 @@ class GraphWiringTests(unittest.TestCase):
             "tools.initialize_application",
             make_initialize_application_tool=lambda **kwargs: "initialize_application",
         )
+        stager_calls = []
+        def make_stager(**kwargs):
+            stager_calls.append(kwargs)
+            return "prepare_latex_documents"
+        fake_latex_stager = module(
+            "tools.prepare_latex_documents",
+            make_prepare_latex_documents_tool=make_stager,
+        )
+        fake_latex_validator = module(
+            "tools.validate_latex_documents",
+            make_validate_latex_documents_tool=lambda **kwargs: "validate_latex_documents",
+        )
         fake_langchain_core = module("langchain_core")
         fake_langchain_api = module("langchain_core._api")
         fake_beta = module(
@@ -121,6 +133,8 @@ class GraphWiringTests(unittest.TestCase):
             **fake_tools,
             "tools.read_local_pdf": fake_local_pdf,
             "tools.initialize_application": fake_application_initializer,
+            "tools.prepare_latex_documents": fake_latex_stager,
+            "tools.validate_latex_documents": fake_latex_validator,
         }
         with patch.dict(sys.modules, stubs):
             for name in ("agent", "subagents"):
@@ -135,8 +149,13 @@ class GraphWiringTests(unittest.TestCase):
                     patch.object(agent, "load_config", return_value=cfg) as load,
                     patch.object(agent, "build_backend", return_value=fake_backend),
                 ):
-                    graph = agent.make_graph()
+                    graph = agent.make_graph(
+                        base_resume="backend.tex",
+                        base_cover="cover.tex",
+                    )
                 self.assertEqual(graph.config, {"recursion_limit": 50})
+                self.assertEqual(stager_calls[0]["base_resume"], "backend.tex")
+                self.assertEqual(stager_calls[0]["base_cover"], "cover.tex")
                 self.assertEqual(load.call_args.kwargs["interactive"], False)
                 self.assertEqual(load.call_args.kwargs["workspace"], Path.cwd())
                 kw = graph.kwargs
@@ -156,11 +175,22 @@ class GraphWiringTests(unittest.TestCase):
                     s for s in kw["subagents"] if s["name"] == "application-agent"
                 )
                 self.assertIn("initialize_application", application["tools"])
+                self.assertIn("prepare_latex_documents", application["tools"])
+                self.assertIn("validate_latex_documents", application["tools"])
                 self.assertEqual(
-                    application["interrupt_on"]["initialize_application"][
-                        "allowed_decisions"
-                    ],
-                    ["approve", "reject"],
+                    application["interrupt_on"]["prepare_latex_documents"]["allowed_decisions"],
+                    ["approve", "reject"]
+                )
+                self.assertEqual(
+                    application["interrupt_on"]["validate_latex_documents"]["allowed_decisions"],
+                    ["approve", "reject"]
+                )
+                for other in (s for s in kw["subagents"] if s["name"] != "application-agent"):
+                    self.assertNotIn("prepare_latex_documents", other["tools"])
+                    self.assertNotIn("validate_latex_documents", other["tools"])
+                self.assertEqual(
+                    application["interrupt_on"]["initialize_application"]["allowed_decisions"],
+                    ["approve", "reject"]
                 )
                 self.assertTrue(
                     all(
@@ -170,7 +200,10 @@ class GraphWiringTests(unittest.TestCase):
                     )
                 )
                 self.assertTrue(
-                    all("read_local_pdf" in sub["tools"] for sub in kw["subagents"])
+                    all(
+                        "read_local_pdf" in sub["tools"]
+                        for sub in kw["subagents"]
+                    )
                 )
                 self.assertNotIn("read_local_pdf", kw["interrupt_on"])
                 self.assertNotIn("read_file", kw["interrupt_on"])

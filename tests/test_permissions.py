@@ -81,57 +81,93 @@ class PermissionsTests(unittest.TestCase):
             )
             self.assertEqual(evaluate(rules, "/workspace/resume.tex"), "deny")
             self.assertEqual(
-                evaluate(rules, "/workspace/templates/resume_template.tex"), "deny"
+                evaluate(rules,
+                         "/workspace/templates/resume_template.tex"),
+                "deny"
             )
             self.assertEqual(
-                evaluate(rules, "/workspace/applications/acme/resume.tex"), "deny"
+                evaluate(rules,
+                         "/workspace/candidate/base-documents/backend.tex"),
+                "deny"
             )
             self.assertEqual(
-                evaluate(
-                    rules,
-                    "/workspace/applications/acme/2026-11-17-ai_engineer/resume.tex",
-                ),
-                "interrupt",
+                evaluate(rules,
+                         "/workspace/applications/acme/resume.tex"),
+                "deny"
             )
             self.assertEqual(
-                evaluate(
-                    rules,
-                    "/workspace/applications/acme/2026-11-17-ai_engineer/qualification_matrix.md",
-                ),
-                "interrupt",
+                evaluate(rules,
+                         "/workspace/applications/acme/2026-11-17-ai_engineer/resume.tex"),
+                "interrupt"
             )
             self.assertEqual(
-                evaluate(
-                    rules,
-                    "/workspace/applications/acme/2026-11-17-ai_engineer/reviews/technical.md",
-                ),
-                "interrupt",
+                evaluate(rules,
+                         "/workspace/applications/acme/2026-11-17-ai_engineer/.latex_source_manifest.json"),
+                "deny"
             )
             self.assertEqual(
-                evaluate(rules, "/workspace/applications/acme/company_inf.md"),
-                "interrupt",
+                evaluate(rules,
+                         "/workspace/applications/acme/2026-11-17-ai_engineer/build/validation.json"),
+                "deny"
             )
             self.assertEqual(
-                evaluate(rules, "/workspace/applications/acme/additional_inf.md"),
-                "interrupt",
+                evaluate(rules,
+                         "/workspace/applications/acme/2026-11-17-ai_engineer/build/cover_letter.pdf"),
+                "deny"
             )
             self.assertEqual(
-                evaluate(rules, "/workspace/applications/acme/custom.md"), "deny"
+                evaluate(rules,
+                         "/workspace/applications/acme/2026-11-17-ai_engineer/qualification_matrix.md"),
+                "interrupt"
             )
             self.assertEqual(
-                evaluate(rules, "/workspace/applications/acme/invalid_date/resume.tex"),
-                "deny",
+                evaluate(rules,
+                         "/workspace/applications/acme/2026-11-17-ai_engineer/reviews/technical.md"),
+                "interrupt"
             )
-            self.assertEqual(evaluate(rules, "/system/agents/shared/AGENTS.md"), "deny")
+            self.assertEqual(
+                evaluate(rules,
+                         "/workspace/applications/acme/company_inf.md"),
+                "interrupt"
+            )
+            self.assertEqual(
+                evaluate(rules,
+                         "/workspace/applications/acme/additional_inf.md"),
+                "interrupt"
+            )
+            self.assertEqual(
+                evaluate(rules,
+                         "/workspace/applications/acme/custom.md"),
+                "deny"
+            )
+            self.assertEqual(
+                evaluate(rules,
+                         "/workspace/applications/acme/invalid_date/resume.tex"),
+                "deny"
+            )
+            self.assertEqual(
+                evaluate(rules,
+                         "/system/agents/shared/AGENTS.md"),
+                "deny"
+            )
             self.assertEqual(evaluate(rules, "/scratch/notes.md"), "allow")
 
     def test_candidate_developer_can_write_profile_with_approval_only(self):
         rules = make_permissions("candidate-profile-agent")
         self.assertEqual(
-            evaluate(rules, "/workspace/candidate/profile.md"), "interrupt"
+            evaluate(rules,
+                     "/workspace/candidate/profile.md"),
+            "interrupt"
         )
         self.assertEqual(
-            evaluate(rules, "/workspace/candidate/FUP-001.md"), "interrupt"
+            evaluate(rules,
+                     "/workspace/candidate/FUP-001.md"),
+            "interrupt"
+        )
+        self.assertEqual(
+            evaluate(rules,
+                     "/workspace/candidate/base-documents/resume.tex"),
+            "deny"
         )
         self.assertEqual(evaluate(rules, "/workspace/research/sources.md"), "interrupt")
         self.assertEqual(evaluate(rules, "/workspace/applications/draft.md"), "deny")
@@ -163,6 +199,7 @@ class PermissionsTests(unittest.TestCase):
             evaluate(owner, "/workspace/profiles/primary/history.md"), "interrupt"
         )
         self.assertEqual(evaluate(owner, "/workspace/candidate/other.md"), "deny")
+        self.assertEqual(evaluate(owner, "/workspace/candidate/base-documents/resume.tex"), "deny")
 
     def test_invalid_prefixes_fail_closed(self):
         for value in (

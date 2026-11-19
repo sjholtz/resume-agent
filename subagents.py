@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import Any, TYPE_CHECKING
 
 from deepagents import MemoryMiddleware, SubAgent
 from deepagents.backends.protocol import BackendProtocol
@@ -19,9 +19,11 @@ from models import model
 from pdf_read_guard import PdfReadGuardMiddleware
 from permissions import make_permissions
 from tools.initialize_application import make_initialize_application_tool
+from tools.prepare_latex_documents import make_prepare_latex_documents_tool
 from tools.read_web_page import read_web_page
 from tools.read_web_pdf import read_web_pdf
 from tools.search import web_search
+from tools.validate_latex_documents import make_validate_latex_documents_tool
 
 if TYPE_CHECKING:
     from langchain.agents.middleware import AgentMiddleware, AgentState
@@ -43,6 +45,8 @@ def _specialist(
     candidate_profile: str,
     local_pdf_reader,
     initialize_application_tool=None,
+    prepare_latex_documents_tool=None,
+    validate_latex_documents_tool=None,
 ) -> SubAgent:
     middleware: list[AgentMiddleware[AgentState[Any], None, Any]] = [
         PdfReadGuardMiddleware(),
@@ -56,19 +60,19 @@ def _specialist(
         description=description,
         system_prompt=utils.load_system_prompt(role),
         tools=[
-            *RESEARCH_TOOLS,
-            local_pdf_reader,
-            *(
-                [initialize_application_tool]
-                if initialize_application_tool is not None
-                else []
-            ),
+            *RESEARCH_TOOLS, local_pdf_reader,
+            *([initialize_application_tool] if initialize_application_tool is not None else []),
+            *([prepare_latex_documents_tool] if prepare_latex_documents_tool is not None else []),
+            *([validate_latex_documents_tool] if validate_latex_documents_tool is not None else []),
         ],
-        interrupt_on=(
-            {"initialize_application": {"allowed_decisions": ["approve", "reject"]}}
-            if initialize_application_tool is not None
-            else {}
-        ),
+        interrupt_on={
+            name: {"allowed_decisions": ["approve", "reject"]}
+            for name, enabled in (
+                ("initialize_application", initialize_application_tool),
+                ("prepare_latex_documents", prepare_latex_documents_tool),
+                ("validate_latex_documents", validate_latex_documents_tool),
+            ) if enabled is not None
+        },
         model=model,
         middleware=middleware,
         skills=utils.get_skill_sources(role),
@@ -103,6 +107,8 @@ def build_subagents(
     candidate_profile: str,
     local_pdf_reader,
     workspace_root: Path,
+    base_resume: str | None = None,
+    base_cover: str | None = None,
 ) -> Sequence[SubAgent]:
     """Return the four role-specific subagents with no cross-role \
     write access."""
@@ -132,9 +138,9 @@ def build_subagents(
             backend=backend,
             candidate_profile=candidate_profile,
             local_pdf_reader=local_pdf_reader,
-            initialize_application_tool=make_initialize_application_tool(
-                workspace_root=workspace_root
-            ),
+            initialize_application_tool=make_initialize_application_tool(workspace_root=workspace_root),
+            prepare_latex_documents_tool=make_prepare_latex_documents_tool(workspace_root=workspace_root, base_resume=base_resume, base_cover=base_cover),
+            validate_latex_documents_tool=make_validate_latex_documents_tool(workspace_root=workspace_root),
         ),
         _specialist(
             name="recruiting-ats-review-agent",

@@ -14,6 +14,7 @@ import argparse
 import json
 import sys
 from collections.abc import Sequence
+from pathlib import Path
 from typing import Any
 from uuid import uuid4
 
@@ -24,9 +25,12 @@ from interactive_input import (
     remember_chat_message,
 )
 from permissions import configured_profile_prefix
+from base_documents import (
+    BaseDocumentSelectionError, list_base_documents, resolve_base_document,
+)
+from profile_review import ReviewError, review_profile_action, reject
 from profile_cancel_guard import ProfileCancelGuard, RejectedWriteRetryLoop
 from profile_receipts import REGISTRY, canonical_cli_report
-from profile_review import ReviewError, reject, review_profile_action
 from write_decision_audit import WriteDecisionAudit
 
 
@@ -52,6 +56,18 @@ def build_parser() -> argparse.ArgumentParser:
         "--debug",
         action="store_true",
         help="Print newly generated message/tool diagnostics (off by default).",
+    )
+    parser.add_argument(
+        "--base-resume", metavar="FILENAME|?", default=None,
+        help="Use a historical .tex resume in candidate/base-documents; '?' lists a terminal picker.",
+    )
+    parser.add_argument(
+        "--base-cover", metavar="FILENAME|?", default=None,
+        help="Use a historical .tex cover letter in candidate/base-documents; '?' lists a terminal picker.",
+    )
+    parser.add_argument(
+        "--list-base-documents", action="store_true",
+        help="List available historical .tex source filenames and exit before starting the model.",
     )
     return parser
 
@@ -122,15 +138,11 @@ def _prompt_approvals(
             try:
                 import os
                 import shutil
-
                 print(
                     "[EDITOR DEBUG]",
-                    "VISUAL =",
-                    repr(os.environ.get("VISUAL")),
-                    "EDITOR =",
-                    repr(os.environ.get("EDITOR")),
-                    "nano =",
-                    shutil.which("nano"),
+                    "VISUAL =", repr(os.environ.get("VISUAL")),
+                    "EDITOR =", repr(os.environ.get("EDITOR")),
+                    "nano =",shutil.which("nano"),
                 )
                 decision = review_profile_action(
                     action,
@@ -269,13 +281,53 @@ def main(argv: Sequence[str] | None = None) -> int:
         print("--trace-project requires --trace", file=sys.stderr)
         return 2
 
+    # Resolve and show source selections before importing the model or
+    # creating a graph. No new dependency (questionary) is required.
+    try:
+        if args.list_base_documents:
+            names = list_base_documents(Path.cwd())
+            print("Historical LaTeX documents in /workspace/candidate/base-documents:")
+            for name in names:
+                print("  " + name)
+            if not names:
+                print("  (none; add .tex files to candidate/base-documents on the host)")
+            return 0
+        interactive = sys.stdin.isatty() and sys.stdout.isatty()
+        base_resume = resolve_base_document(
+            Path.cwd(), args.base_resume, kind="resume", interactive=interactive,
+        )
+        base_cover = resolve_base_document(
+            Path.cwd(), args.base_cover, kind="cover", interactive=interactive,
+        )
+    except (BaseDocumentSelectionError, EOFError, KeyboardInterrupt) as exc:
+        print(f"Document selection failed: {exc}", file=sys.stderr)
+        return 2
+
     # Defer expensive imports (and model creation) until after --help
     # parsing.
     from langsmith import tracing_context
 
     from agent import make_graph
 
-    graph = make_graph()
+    graph = (make_graph(base_resume=base_resume, base_cover=base_cover)
+             if base_resume is not None or base_cover is not None
+             else make_graph())
+    print("Resume source:", (
+        "/workspace/candidate/base-documents/" + base_resume if base_resume
+        else "/workspace/templates/resume_template.tex"))
+    print("Cover source:", (
+        "/workspace/candidate/base-documents/" + base_cover if base_cover
+        else "/workspace/templates/cover_letter_template.tex"))
+    selection_notice = ""
+    if base_resume is not None or base_cover is not None:
+        selection_notice = (
+            "[Selected document sources for this agent invocation. "
+            "The approved prepare_latex_documents tool is bound to these selections; "
+            "do not substitute other sources.]\n"
+            "Resume: " + (base_resume or "default resume_template.tex") + "\n"
+            "Cover: " + (base_cover or "default cover_letter_template.tex") + "\n\n"
+        )
+    first_turn = True
     profile = configured_profile_prefix()
     session_config = {
         "configurable": {
@@ -295,7 +347,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         print("LangSmith tracing OFF")
 
     def run_once(message: str) -> None:
-        nonlocal session_config, debug_message_count
+        nonlocal session_config, debug_message_count, first_turn
         # The guard is fresh for EACH user turn, including all interrupt resumes.
         guard = ProfileCancelGuard()
         write_audit = WriteDecisionAudit()
@@ -310,7 +362,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                         "messages": [
                             {
                                 "role": "user",
-                                "content": message,
+                                "content": selection_notice + message if first_turn else message,
                             },
                         ],
                     },
@@ -331,9 +383,8 @@ def main(argv: Sequence[str] | None = None) -> int:
                 },
             }
             debug_message_count = 0
-            print(
-                "Started a fresh conversation thread; prior thread remains abandoned."
-            )
+            first_turn = True
+            print("Started a fresh conversation thread; prior thread remains abandoned.")
             return True
         except Exception as exc:
             # A model/provider error can leave partial state in the graph
@@ -351,10 +402,10 @@ def main(argv: Sequence[str] | None = None) -> int:
                 "configurable": {"thread_id": str(uuid4())},
             }
             debug_message_count = 0
-            print(
-                "Started a fresh conversation thread; the failed thread was abandoned."
-            )
+            first_turn = True
+            print("Started a fresh conversation thread; the failed thread was abandoned.")
             return False
+        first_turn = False
         # --debug is opt-in. Avoid replaying LangGraph's accumulated
         # --history.
         messages = answer.get("messages", []) if isinstance(answer, dict) else []
@@ -373,16 +424,11 @@ def main(argv: Sequence[str] | None = None) -> int:
 
                 print(
                     "[DEBUG]",
-                    "type=",
-                    getattr(msg, "type", None),
-                    "content_length=",
-                    len(str(content)),
-                    "tool_calls=",
-                    len(getattr(msg, "tool_calls", []) or []),
-                    "reasoning_present=",
-                    bool(kwargs.get("reasoning_content")),
-                    "response_metadata=",
-                    metadata,
+                    "type=", getattr(msg, "type", None),
+                    "content_length=", len(str(content)),
+                    "tool_calls=", len(getattr(msg, "tool_calls", []) or []),
+                    "reasoning_present=", bool(kwargs.get("reasoning_content")),
+                    "response_metadata=", metadata,
                     file=sys.stderr,
                 )
 

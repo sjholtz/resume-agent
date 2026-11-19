@@ -89,6 +89,11 @@ def make_permissions(role: Role, *, candidate_profile: str | None = None):
         paths=_subtree(profile + "/evidence/sources/documents"),
         mode="deny",
     )
+    deny_base_documents = FilesystemPermission(
+        operations=["write"],
+        paths=_subtree("/workspace/candidate/base-documents"),
+        mode="deny",
+    )
     deny_system = FilesystemPermission(
         operations=[
             "write",
@@ -102,6 +107,7 @@ def make_permissions(role: Role, *, candidate_profile: str | None = None):
         return [
             deny_system,
             deny_source_documents,
+            deny_base_documents,
             FilesystemPermission(
                 operations=[
                     "write",
@@ -115,6 +121,18 @@ def make_permissions(role: Role, *, candidate_profile: str | None = None):
             FilesystemPermission(
                 operations=["write"],
                 paths=_subtree("/workspace/templates"),
+                mode="deny",
+            ),
+            # Only the dedicated, HITL-interrupted LaTeX tools may create
+            # template provenance and build artifacts. Otherwise an agent
+            # could forge validation.json or alter a manifest after staging.
+            FilesystemPermission(
+                operations=["write"],
+                paths=[
+                    f"/workspace/applications/*/{_DATE_COMPONENT}/.latex_source_manifest.json",
+                    f"/workspace/applications/*/{_DATE_COMPONENT}/build",
+                    f"/workspace/applications/*/{_DATE_COMPONENT}/build/**",
+                ],
                 mode="deny",
             ),
             # Only canonical company records or position-scoped artifacts may
@@ -136,6 +154,7 @@ def make_permissions(role: Role, *, candidate_profile: str | None = None):
         return [
             deny_system,
             deny_source_documents,
+            deny_base_documents,
             FilesystemPermission(
                 operations=[
                     "write",
@@ -177,6 +196,7 @@ def make_permissions(role: Role, *, candidate_profile: str | None = None):
         return [
             deny_system,
             deny_source_documents,
+            deny_base_documents,
             FilesystemPermission(
                 operations=[
                     "write",

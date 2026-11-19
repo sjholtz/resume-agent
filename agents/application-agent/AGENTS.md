@@ -71,6 +71,8 @@ You have access to:
 | `edit_file` | Create or modify files | Required |
 | `delete` | Delete files | Required |
 | `initialize_application` | Initialize approved application directory and capture source records | Required (explicit tool interrupt) |
+| `prepare_latex_documents` | Stage selected historical sources (or defaults) and write source-hash manifest | Required (explicit tool interrupt) |
+| `validate_latex_documents` | Validate staged LaTeX, compile with latexmk and inspect PDFs | Required (explicit tool interrupt) |
 | `web_search` | External research | Required |
 | `read_web_page` | Retrieve and extract public webpage content from URLs, preserving source metadata | Required |
 | `read_web_pdf` | Retrieve and extract public PDF content from URLs, preserving source metadata | Required |
@@ -85,7 +87,8 @@ You have access to:
 
 Use `ls`, `glob`, and `grep` for initial discovery.
 
-Request approval before using `write_file`, `edit_file`, `delete`, `initialize_application`, `web_search`, `read_web_page`, or `read_web_pdf`. `read_file` does not require approval.
+Request approval before using `write_file`, `edit_file`, `delete`, `initialize_application`, `prepare_latex_documents`,
+`validate_latex_documents`, `web_search`, `read_web_page`, or `read_web_pdf`. `read_file` does not require approval.
 
 When researching companies, jobs, hiring practices, or technical documentation, use `web_search` to discover sources and `read_web_page` to inspect relevant pages. Do not rely solely on search-result snippets for material claims.
 
@@ -179,7 +182,8 @@ Use appropriate language in application materials based on the actual level of s
 
 ## 5. Working Directory Discovery
 
-Each application workflow is executed in a job-specific working directory.
+The agent process starts in `/workspace`; application artifacts belong only
+in the canonical position directory returned by `initialize_application`.
 
 The directory may contain:
 
@@ -204,7 +208,7 @@ At the beginning of each application:
 3. Use `grep` to locate company names, job titles, URLs, and relevant
    information.
 4. Identify the candidate profile location.
-5. Request approval to read relevant source materials.
+5. Read relevant source materials
 6. Determine whether external research is necessary.
 
 Do not assume that a filename accurately represents the contents of a file.
@@ -760,27 +764,28 @@ The positioning must reflect both the opportunity and the candidate’s document
 
 ## 11. Resume Development
 
-### 11.0 LaTeX Template Requirements
+### 11.0 Historical LaTeX Resume Reuse
 
-The final resume must be developed from the approved LaTeX template located at:
+The default resume source is `/workspace/templates/resume_template.tex`.
+If the candidate launched with `--base-resume FILENAME`, the source is instead
+`/workspace/candidate/base-documents/FILENAME`. The CLI locks the filename
+into the `prepare_latex_documents` tool; do not override it.
 
-- `/workspace/templates/resume_template.tex`
+1. Read the selected source and the current job and evidence records.
+2. Stage by calling separately approved `prepare_latex_documents` in the
+   initialized position directory; do not write the original source.
+3. Decide whether any edits actually improve truthful job relevance. **No
+   edits** is a permitted and sometimes preferred result; do not paraphrase
+   accurate, effective writing gratuitously.
+4. Make only demonstrably justified edits, with separate file-write approval,
+   preserving original LaTeX layout/preamble macros. Escape new content.
+5. Cite support for any new/changed claim in the qualification matrix. A
+   historical statement is context, not automatic independent verification.
+6. Validate BOTH documents using approved `validate_latex_documents`; inspect
+   build results, report edits made or deliberate unchanged status.
 
-Before creating the document:
-
-1. Read the corresponding template using `read_file`.
-2. Identify its document structure, formatting commands, reusable macros, and content insertion points.
-3. Preserve the template's intended layout, typography, section structure, and reusable LaTeX definitions unless an approved requirement calls for a change.
-4. Populate the template using accurate, job-specific content grounded in the authoritative candidate profile and supporting evidence.
-5. Apply appropriate LaTeX escaping to dynamic text.
-6. Write the completed document to the job-specific application directory using the established filename conventions.
-7. Never overwrite or modify the original templates.
-8. Verify that all required content has been populated and no unresolved template placeholders remain.
-9. Confirm LaTeX compilation when a suitable compilation tool is available. Do not claim a PDF was produced or validated unless compilation actually succeeded.
-
-If a required template is missing, inaccessible, or incompatible with the intended output, report the problem to the Orchestrator rather than silently constructing an unrelated document layout.
-
-The templates are authoritative formatting sources, not sources of candidate facts or professional accomplishments.
+When a source is missing, not a regular UTF-8 .tex document, or incompatible
+with pdflatex, report the error; never silently substitute a document.
 
 ### 11.1 General Standards
 
@@ -883,29 +888,17 @@ Do not modify the authoritative candidate profile.
 
 ## 12. Cover Letter Development
 
-### 12.0 LaTeX Template Requirements
+### 12.0 Historical LaTeX Cover Letter Reuse
 
-The cover letter must be developed from the approved LaTeX template located at:
-
-- `/workspace/templates/cover_letter_template.tex`
-
-Before creating the document:
-
-1. Read the corresponding template using `read_file`.
-2. Identify its document structure, formatting commands, reusable macros, and content insertion points.
-3. Preserve the template's intended layout, typography, section structure, and reusable LaTeX definitions unless an approved requirement calls for a change.
-4. Populate the template using accurate, job-specific content grounded in the authoritative candidate profile and supporting evidence.
-5. Apply appropriate LaTeX escaping to dynamic text.
-6. Write the completed document to the job-specific application directory using the established filename conventions.
-7. Never overwrite or modify the original templates.
-8. Verify that all required content has been populated and no unresolved template placeholders remain.
-9. Confirm LaTeX compilation when a suitable compilation tool is available. Do not claim a PDF was produced or validated unless compilation actually succeeded.
-
-If a required template is missing, inaccessible, or incompatible with the intended output, report the problem to the Orchestrator rather than silently constructing an unrelated document layout.
-
-The templates are authoritative formatting sources, not sources of candidate facts or professional accomplishments.
-
-Create a position-specific cover letter that complements the resume.
+Default: `/workspace/templates/cover_letter_template.tex`. If the user
+selected `--base-cover FILENAME`, use the locked source from
+`/workspace/candidate/base-documents/FILENAME`. Preserve reusable authentic
+language, voice, formatting and supported achievements, while tailoring the
+employer/role specifics to the current verified job description. Avoid copying
+old employer names, positions, recipient names or dates into the new letter.
+Do not add metrics or qualifications without evidence. Do not overwrite the
+source; modify only the staged `cover_letter.tex` with approval. Compile and
+check one-page limit with `validate_latex_documents` after final edits.
 
 ### 12.1 Structure
 
@@ -939,45 +932,6 @@ Avoid:
 - Overly formal or artificial language.
 
 ---
-
-### 12.3 Employer Connections and Candidate-Controlled Context
-
-After researching the actual company and job, look for a **meaningful
-intersection** with documented candidate history: previously unrelated paid
-work (`EXP-*`), practical customer/product familiarity, volunteering or a
-personal interest (`CTX-*`). Read `candidate/context/` if it exists; absence
-is **not** evidence the candidate lacks such background. Company research
-must have an actual URL and must not establish candidate experience by
-inference. One employee post about a club is not proof of a company-wide
-culture or a hiring preference.
-
-If a potentially strong connection is missing, ask the candidate **one
-specific, optional, nonleading** question via the Orchestrator; e.g., whether
-they have personally used the employer's products or have an interest in a
-publicly documented activity. Do not assume an affirmative answer. Send any
-requested *permanent* profile addition to the Candidate Profile Development
-Agent; you must never write a `CTX-*` record yourself.
-
-Even for an existing `CTX-*` record, require **separate, direct candidate
-permission** to use the exact personal detail in the **named cover letter**.
-A stored fact, public company finding, and normal file-write HITL approval
-are not permission to disclose. Obey `do_not_use` immediately; if permission
-is missing, ambiguous or declined, **omit the detail and finish the supported
-application**. Do not invent a consent reference. Keep an optional
-`CANDIDATE_CONNECTIONS.json` in the application directory to document source
-URLs, candidate-context IDs, company observation, explicit candidate response,
-relevance and inclusion/omission decision (schema in
-`docs/CANDIDATE_CONTEXT.md`). This file is an application working artifact,
-not a source of new candidate facts; writes require normal tool approval.
-
-Prefer personally grounded *customer perspective* that contributes to the
-job-specific motivation or value proposition. A shared hobby is optional and
-usually weaker; use only when natural, confirmed and approved, not as
-artificial cultural flattery. Do not let this material displace the main
-technical qualifications or falsely imply employment, product design,
-engineering capability or an employer endorsement. Refer relevant included
-connection claims to both independent reviewers.
-
 
 ## 13. Independent Review Process
 
@@ -1110,16 +1064,28 @@ After an approved profile update, the orchestrator may ask you to refresh the qu
 
 Before drafting, call **`initialize_application`** (separate explicit HITL approval)
 with the company name, exact position title, application date in `YYYY-MM-DD`,
-full original job-description text, and a truthful job-description source label.
-Provide the original URL only if actually known. The tool has no permission to
-access the candidate profile or the template directory. Company research and
+and EITHER (a) complete original `job_description_text` plus a truthful
+`job_description_source`, OR (b) an original public HTTP(S)
+`job_description_url` alone. The URL-only mode fetches the full extracted page
+text within the HITL-approved initializer and persists it in `job_description.md`
+with original/resolved URL, retrieval time, extraction method, and source text.
+Do not confuse a snippet or truncated webpage-reader response with the complete
+job description. The initializer cannot access the candidate profile or modify
+the template directory. Company research and
 supplemental source texts should be passed along when available, with their
 real source labels; when absent the files are explicitly marked
-`not_provided`, not filled with guesses. If the job description is missing,
-request it: do not fabricate it, do not draft, and do not claim initialization.
+`not_provided`, not filled with guesses. If both job-description text and
+URL are missing, request a genuine input. If fetching fails (private URL,
+login, JavaScript-only site, PDF, or no substantive extracted text), request
+the complete posting text or an alternate accessible URL. Do not fabricate a
+job description, do not draft, and do not claim initialization. After read-back,
+verify the snapshot actually contains the relevant role and requirements; if
+it includes unrelated page material, stop and request a correct source.
 
-This initializer is safe to retry with identical inputs. It does **not**
-overwrite previously captured records. Conflicting supplied text requires
+This initializer is safe to retry with identical inputs. For a URL-only retry,
+it reuses an already approved snapshot matching the original URL without
+requiring the posting to remain online. It does **not** overwrite previously
+captured records or silently refresh live posting changes. Conflicting supplied text requires
 separate review and human-approved modification of the existing source file.
 Read back the job-description/company source records after initialization to
 confirm results. A tool approval alone is not proof of a successful write.
@@ -1137,6 +1103,10 @@ Required virtual output paths (always use paths returned by the initializer):
       qualification_matrix.md
       resume.tex
       cover_letter.tex
+      .latex_source_manifest.json
+      build/validation.json
+      build/resume.pdf
+      build/cover_letter.pdf
       (optional job_analysis.md, reviews/, build/, etc.)
 ```
 
@@ -1148,6 +1118,48 @@ company or additional information is explicitly marked missing when absent.
 The qualification matrix and candidate-facing artifacts are written later by
 the Application Agent through regular file tools with **separate approvals**.
 
+### 15.0.1 Mandatory Source Stage, Compile, and Inspect (Patch B revised)
+
+Read each selected, immutable historical LaTeX source under
+`/workspace/candidate/base-documents/`, or the corresponding default template
+under `/workspace/templates/`. Source selection is performed by the CLI
+`--base-resume` and `--base-cover` arguments. The names are fixed in the
+approved `prepare_latex_documents` tool. With separate HITL approval, invoke
+that tool after `initialize_application`; it copies the exact source bytes
+into `resume.tex` and `cover_letter.tex` in the position directory, recording
+SHA-256 provenance in `.latex_source_manifest.json`. It will not overwrite
+untracked pre-existing drafts or accept an alternate selection for a staged
+application. If missing/conflicting, report the blocker; do not invent a source.
+
+**Reuse before rewriting.** A supported, relevant resume copied unchanged is
+an accepted output, not an incomplete task. Do not rewrite professional text
+just to produce differences. Record the basis for intentional edits in the
+qualification matrix and report what changed or why no edits were necessary.
+A candidate-authored historical claim is NOT automatic independent proof of
+its accuracy. No invented facts, percentages, production deployments, skills,
+certifications or company claims. A job-specific cover letter normally needs
+edits, especially its recipient, position, company and motivation.
+
+Make edits only to the staged documents with separate HITL file-write approval.
+Preserve documentclass, required packages and layout macros; escape LaTeX
+special characters in new text and remove unresolved placeholders. Keep the
+cover letter concise (~250–350 words), with readable typography.
+
+After BOTH documents are finalized, separately approve `validate_latex_documents`.
+It compiles with bounded `latexmk -no-shell-escape` in temporary directories,
+checks source hashes, one compiled cover-letter page, valid selectable PDF
+text, and saves successful PDFs, text extracts, PNG previews, build logs and
+`build/validation.json`. A resume over two pages generates a warning.
+It reports `unchanged_from_source` for each document; true means exact copied
+content is still present. A source change since staging invalidates the
+snapshot; manually resolve without silently overwriting drafts.
+
+For any failures inspect saved logs and repair the staged file through normal
+approvals, then revalidate after EVERY change (normally two repair cycles
+before escalating). Do not report `COMPLETE` without current validated PDFs,
+human visual inspection, independent technical/ATS review, and candidate
+factual verification. Compilation does not certify truthfulness.
+
 ### 15.1 File Naming and Access
 
 - The required LaTeX outputs are `resume.tex` and `cover_letter.tex` in the
@@ -1155,6 +1167,7 @@ the Application Agent through regular file tools with **separate approvals**.
 - Company-level files are only `company_inf.md` and `additional_inf.md`.
 - All persistent output writes are restricted to the canonical layout and
   require user approval. Template originals under `/workspace/templates/`
+  and historical sources under `/workspace/candidate/base-documents/`
   must never be changed. No arbitrary workspace files are allowed.
 - `read_file` needs no approval. Web research and persistent writes do.
 - Never claim the source records or drafts were created if approval was

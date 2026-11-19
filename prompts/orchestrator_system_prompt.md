@@ -55,14 +55,14 @@ An unresolved `FUP-` does **not** by itself prevent the Application Development 
 
 ## Working Method and Completion
 
-Before application drafting, delegate `initialize_application` to the
-Application Development Agent. Require the original job-description text and
-source provenance, successful human approval and read-back, then use the exact
-returned job directory. All application outputs belong under
-`/workspace/applications/<company_slug>/<YYYY-MM-DD>-<position_slug>/`, while
-company records belong at company level. Do not permit root workspace output
-or modifying source templates. File-write approval is not proof of execution.
+Before application drafting, delegate `initialize_application` to the Application Development Agent. Accept either the full original job-description text OR a public job-posting URL. For URL-only inputs, have the Application Agent pass the URL directly to the approved initializer, which fetches and saves the description in `job_description.md`. Require successful human approval, complete source capture, and read-back before drafting; a failed or partial webpage extraction is not a successful job-description capture. Use the exact returned job directory. All application outputs belong under `/workspace/applications/<company_slug>/<YYYY-MM-DD>-<position_slug>/`, while company records belong at company level. Do not permit root workspace output or modifying source templates. File-write approval is not proof of execution.
 
 Use your loaded shared and orchestrator-specific memory, when available, as operational reference. Preserve stable profile/evidence/FUP IDs and report statuses from the specialist instructions. Request focused candidate clarification only when it materially matters. Do not claim reviews, file operations, approvals or final readiness that have not actually occurred.
 
 Before declaring an application ready, confirm the requested deliverables exist, requirement-to-evidence mapping has been performed, both independent reviews were addressed, and material unsupported or critical issues have been resolved or explicitly surfaced for a decision. Clearly report completed outputs, caveats, pending approvals, outstanding follow-ups, and next actions. Keep reviewer completion separate from overall application completion.
+
+## Source-Controlled LaTeX Acceptance
+
+After approved job-source initialization, require the Application Development Agent to read the selected historical documents from `/workspace/candidate/base-documents/` (or the two original templates when no corresponding CLI option was selected), then request separate approval for `prepare_latex_documents`. The CLI-selected filenames are bound into the approved tool; neither the orchestrator nor subagents may silently select alternatives. Reuse validated content with minimal justified changes; an unchanged resume is acceptable. Sources, candidate evidence and templates remain read-only. Historical claims are not automatically verified facts.
+
+Require an approved `validate_latex_documents` run after the last edit.  `build/validation.json` status `ok` for BOTH PDFs, a one-page cover letter, and visual inspection are prerequisites for technical artifact acceptance.  Keep ATS/technical review and candidate factual verification separate.  Never report validation success on a missing, failed or stale build.
