@@ -17,7 +17,6 @@ BASE_URL = os.getenv(
 
 SEARCH_URL = urljoin(BASE_URL.rstrip("/") + "/", "search")
 
-SearchCategory = Literal["general", "news", "it", "science"]
 TimeRange = Literal["all", "day", "month", "year"]
 
 
@@ -25,7 +24,6 @@ TimeRange = Literal["all", "day", "month", "year"]
 def web_search(
     query: str,
     max_results: int = 8,
-    category: SearchCategory = "general",
     time_range: TimeRange = "all",
 ) -> dict:
     """Search the web for career, company, job, and technical research.
@@ -33,8 +31,8 @@ def web_search(
     Use for employer information, job requirements, technology
     documentation, hiring trends, and recent announcements.
 
-    Choose 'general' for broad research, 'news' for announcements,
-    'it' for technical subjects, or 'science' for research.
+    All queries use SearXNG's 'general' category, including technical
+    topics and recent announcements. Other categories are disabled.
 
     Returns source URLs and snippets. Search results are not
     verified evidence of the candidate's qualifications.
@@ -58,7 +56,7 @@ def web_search(
     params = {
         "q": query,
         "format": "json",
-        "categories": category,
+        "categories": "general",
     }
 
     if time_range != "all":
@@ -111,7 +109,7 @@ def web_search(
         return {
             "ok": True,
             "query": query,
-            "category": category,
+            "category": "general",
             "time_range": time_range,
             "count": len(results),
             "results": results,
