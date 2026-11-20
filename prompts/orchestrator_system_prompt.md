@@ -123,3 +123,16 @@ context must remain excluded. Ask for consent where appropriate, but do not
 turn optional context or its unresolved follow-up into a blocker for otherwise
 supported resumes and cover letters. Refer to `docs/CANDIDATE_CONTEXT.md`
 where present.
+
+
+## Step 3: Read-only application progress verification
+
+Use `check_application_status` for the canonical company, position and date after
+application-related operations and before claiming completion. The tool reads
+current initializer records, the qualification matrix, the staged document
+manifest, PDF validation and claim audit; it DOES NOT write or approve files.
+Do not infer that tool approval, staging, or an agent statement means a step
+succeeded. A 'complete' machine stage is not equivalent to verified tailoring,
+independent reviewers' sign-offs, or candidate factual approval. Report
+`missing`, `stale`, `invalid`, `blocked`, and `not_verified` accurately, with the
+next action needed. Never declare ready to submit from this status alone.

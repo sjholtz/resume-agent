@@ -78,6 +78,7 @@ def make_graph(*, checkpointer=None, base_resume: str | None = None, base_cover:
     from tools.read_local_pdf import make_read_local_pdf_tool
     from tools.search import web_search
     from tools.check_claim_audit import make_check_claim_audit_tool
+    from tools.check_application_status import make_check_application_status_tool
 
     warnings.filterwarnings("ignore", category=LangChainBetaWarning)
 
@@ -113,6 +114,8 @@ def make_graph(*, checkpointer=None, base_resume: str | None = None, base_cover:
             read_web_pdf,
             local_pdf_reader,
             make_check_claim_audit_tool(
+                workspace_root=config.workspace_root, candidate_profile=profile),
+            make_check_application_status_tool(
                 workspace_root=config.workspace_root, candidate_profile=profile),
         ],
         interrupt_on=RESEARCH_INTERRUPT_ON,

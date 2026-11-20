@@ -132,3 +132,17 @@ Candidate Profile Development Agent's approved handling through the Orchestrator
 Keep optional missing context nonblocking. Treat this material as read-only
 and confidential in resumes, cover letters and internal handoffs. Refer to
 `docs/CANDIDATE_CONTEXT.md` where present.
+
+
+## Step 3: Application status and incomplete handoffs
+
+Call the read-only `check_application_status` after source capture, document
+staging, compilation, and claim auditing, using exactly the canonical
+application identity returned by the initializer. Verify all successful
+stage claims from actual artifacts. A staged historical resume/cover letter
+may be unchanged and is not necessarily a completed tailored draft. If work
+must stop before validation and independent reviews, report a specific
+incomplete handoff rather than only announcing intent to keep working. Never
+try to update machine-owned reports with ordinary file tools to force a green
+status. Reviewer completion and candidate factual sign-off remain separately
+unverified without affirmative evidence.

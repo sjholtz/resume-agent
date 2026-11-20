@@ -98,6 +98,10 @@ class GraphWiringTests(unittest.TestCase):
             "tools.check_claim_audit",
             make_check_claim_audit_tool=lambda **kwargs: "check_claim_audit",
         )
+        fake_application_state = module(
+            "tools.check_application_status",
+            make_check_application_status_tool=lambda **kwargs: "check_application_status",
+        )
         fake_langchain_core = module("langchain_core")
         fake_langchain_api = module("langchain_core._api")
         fake_beta = module(
@@ -125,6 +129,7 @@ class GraphWiringTests(unittest.TestCase):
             "tools.validate_latex_documents": fake_latex_validator,
             "tools.audit_application_claims": fake_claim_auditor,
             "tools.check_claim_audit": fake_claim_checker,
+            "tools.check_application_status": fake_application_state,
         }
         with patch.dict(sys.modules, stubs):
             for name in ("agent", "subagents"):
@@ -157,6 +162,9 @@ class GraphWiringTests(unittest.TestCase):
                 self.assertIn("check_claim_audit", application["tools"])
                 self.assertIn("check_claim_audit", kw["tools"])
                 self.assertNotIn("check_claim_audit", kw["interrupt_on"])
+                self.assertIn("check_application_status", kw["tools"])
+                self.assertIn("check_application_status", application["tools"])
+                self.assertNotIn("check_application_status", kw["interrupt_on"])
                 self.assertEqual(application["interrupt_on"]["audit_application_claims"]["allowed_decisions"], ["approve", "reject"])
                 self.assertNotIn("check_claim_audit", application["interrupt_on"])
                 self.assertEqual(application["interrupt_on"]["prepare_latex_documents"]["allowed_decisions"], ["approve", "reject"])

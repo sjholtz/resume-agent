@@ -26,6 +26,7 @@ from tools.prepare_latex_documents import make_prepare_latex_documents_tool
 from tools.validate_latex_documents import make_validate_latex_documents_tool
 from tools.audit_application_claims import make_audit_application_claims_tool
 from tools.check_claim_audit import make_check_claim_audit_tool
+from tools.check_application_status import make_check_application_status_tool
 
 if TYPE_CHECKING:
     from langchain.agents.middleware import AgentMiddleware, AgentState
@@ -51,6 +52,7 @@ def _specialist(
     validate_latex_documents_tool=None,
     audit_application_claims_tool=None,
     check_claim_audit_tool=None,
+    check_application_status_tool=None,
 ) -> SubAgent:
     middleware: list[AgentMiddleware[AgentState[Any], None, Any]] = [
         PdfReadGuardMiddleware(),
@@ -70,6 +72,7 @@ def _specialist(
             *([validate_latex_documents_tool] if validate_latex_documents_tool is not None else []),
             *([audit_application_claims_tool] if audit_application_claims_tool is not None else []),
             *([check_claim_audit_tool] if check_claim_audit_tool is not None else []),
+            *([check_application_status_tool] if check_application_status_tool is not None else []),
         ],
         interrupt_on={
             name: {"allowed_decisions": ["approve", "reject"]}
@@ -152,6 +155,8 @@ def build_subagents(
                 workspace_root=workspace_root, candidate_profile=candidate_profile),
             check_claim_audit_tool=make_check_claim_audit_tool(
                 workspace_root=workspace_root, candidate_profile=candidate_profile),
+            check_application_status_tool=make_check_application_status_tool(
+                workspace_root=workspace_root, candidate_profile=candidate_profile),
         ),
         _specialist(
             name="recruiting-ats-review-agent",
@@ -166,6 +171,8 @@ def build_subagents(
             local_pdf_reader=local_pdf_reader,
             check_claim_audit_tool=make_check_claim_audit_tool(
                 workspace_root=workspace_root, candidate_profile=candidate_profile),
+            check_application_status_tool=make_check_application_status_tool(
+                workspace_root=workspace_root, candidate_profile=candidate_profile),
         ),
         _specialist(
             name="technical-review-agent",
@@ -179,6 +186,8 @@ def build_subagents(
             candidate_profile=candidate_profile,
             local_pdf_reader=local_pdf_reader,
             check_claim_audit_tool=make_check_claim_audit_tool(
+                workspace_root=workspace_root, candidate_profile=candidate_profile),
+            check_application_status_tool=make_check_application_status_tool(
                 workspace_root=workspace_root, candidate_profile=candidate_profile),
         ),
     ]

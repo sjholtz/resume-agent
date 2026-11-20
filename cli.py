@@ -20,6 +20,11 @@ from uuid import uuid4
 
 from application_task_status import REGISTRY as APPLICATION_TASK_REGISTRY
 from application_write_guard import ApplicationWriteError, is_application_path, require_initialized_document_path
+from application_state import (
+    _selected_job, application_status_for_path, scan_application_workspace, format_application_status,
+)
+from application_workspace import ApplicationWorkspaceError, canonical_paths
+from latex_workflow import LatexWorkflowError
 from interactive_input import (
     configure_readline,
     edit_chat_message,
@@ -71,6 +76,14 @@ def build_parser() -> argparse.ArgumentParser:
         help="Use a historical .tex cover letter in candidate/base-documents; '?' lists a terminal picker.",
     )
     parser.add_argument(
+        "--application-status", nargs="?", const="all", metavar="COMPANY/DATE-ROLE",
+        help="Read current application stages and exit (no argument lists all canonical applications).",
+    )
+    parser.add_argument(
+        "--application-status-json", action="store_true",
+        help="Output --application-status as JSON instead of a human-readable summary.",
+    )
+    parser.add_argument(
         "--list-base-documents", action="store_true",
         help="List available historical .tex source filenames and exit before starting the model.",
     )
@@ -89,6 +102,38 @@ def _is_profile_write(action: dict[str, Any], prefix: str) -> bool:
     )
 
 
+def _record_attempted_application(action: dict[str, Any], targets: set[str]) -> None:
+    """Scope the next read-only summary; an approval is NOT a success receipt."""
+    args = action.get("args")
+    if not isinstance(args, dict):
+        return
+    name = action.get("name")
+    if name in {
+        "initialize_application", "prepare_latex_documents", "validate_latex_documents",
+        "audit_application_claims", "check_application_status", "check_claim_audit",
+    }:
+        try:
+            paths = canonical_paths(args.get("company_name"), args.get("position_title"), args.get("application_date"))
+            relative = paths.position_directory.removeprefix("/workspace/applications/")
+            _selected_job(relative)
+            targets.add(relative)
+        except (ApplicationWorkspaceError, ValueError, TypeError):
+            return
+    elif name in {"write_file", "edit_file", "delete"}:
+        target = args.get("file_path")
+        if not isinstance(target, str) or not target.startswith("/workspace/applications/"):
+            return
+        parts = target.removeprefix("/workspace/applications/").split("/")
+        if len(parts) < 3:
+            return
+        relative = "/".join(parts[:2])
+        try:
+            _selected_job(relative)
+            targets.add(relative)
+        except (ApplicationWorkspaceError, ValueError):
+            return
+
+
 def _prompt_approvals(
     request: dict[str, Any],
     *,
@@ -100,6 +145,7 @@ def _prompt_approvals(
     input_fn=input,
     workspace_root: Path | None = None,
     local_debug=None,
+    application_targets: set[str] | None = None,
 ) -> dict[str, list[dict[str, str]]]:
     """Conservative review of a batched HumanInTheLoopMiddleware interrupt.
 
@@ -128,6 +174,8 @@ def _prompt_approvals(
     for i, action in enumerate(actions):
         if not isinstance(action, dict):
             raise TypeError("Unexpected HITL action format")
+        if application_targets is not None:
+            _record_attempted_application(action, application_targets)
         if local_debug is not None:
             from local_debug import _ident
             local_debug.emit("approval.request", tool=_ident(action.get("name")))
@@ -241,6 +289,7 @@ def _run_to_completion(
     input_fn=input,
     workspace_root: Path | None = None,
     local_debug=None,
+    application_targets: set[str] | None = None,
 ):
     """Invoke and safely resume batched HITL interrupts on the same \
     thread."""
@@ -282,6 +331,7 @@ def _run_to_completion(
             input_fn=input_fn,
             workspace_root=workspace_root,
             local_debug=local_debug,
+            application_targets=application_targets,
         )
         from langgraph.types import Command
 
@@ -324,6 +374,36 @@ def main(argv: Sequence[str] | None = None) -> int:
     if args.trace_project and not args.trace:
         print("--trace-project requires --trace", file=sys.stderr)
         return 2
+    if args.application_status_json and args.application_status is None:
+        print("--application-status-json requires --application-status", file=sys.stderr)
+        return 2
+    if args.application_status is not None:
+        # Pure filesystem inspection. Do NOT initialize the model or agent graph.
+        try:
+            root = Path.cwd()
+            if args.application_status == "all":
+                scan = scan_application_workspace(root, candidate_profile=configured_profile_prefix())
+                reports = scan["applications"]
+            else:
+                reports = [application_status_for_path(
+                    root, args.application_status, candidate_profile=configured_profile_prefix())]
+                scan = None
+            if args.application_status_json:
+                print(json.dumps(scan if scan is not None else reports[0], indent=2, sort_keys=True))
+            else:
+                if reports:
+                    print("\n\n".join(format_application_status(report) for report in reports))
+                else:
+                    print("No canonical application directories found.")
+                if scan is not None:
+                    for warning in scan["anomalies"]:
+                        print("WARNING: " + warning["path"] + " — " + warning["issue"])
+                    if scan["additional_anomalies"]:
+                        print(f"WARNING: {scan['additional_anomalies']} additional anomalies omitted")
+            return 0
+        except (ApplicationWorkspaceError, LatexWorkflowError, OSError, ValueError) as exc:
+            print(f"Cannot inspect application status: {exc}", file=sys.stderr)
+            return 2
 
     # Resolve and show source selections before importing the model or
     # creating a graph. No new dependency (questionary) is required.
@@ -407,6 +487,19 @@ def main(argv: Sequence[str] | None = None) -> int:
         # The guard is fresh for EACH user turn, including all interrupt resumes.
         guard = ProfileCancelGuard()
         write_audit = WriteDecisionAudit()
+        application_targets: set[str] = set()
+
+        def report_attempted_applications() -> None:
+            # Never mistake model statements or user approval for completion.
+            for name in sorted(application_targets)[:10]:
+                try:
+                    status = application_status_for_path(
+                        Path.cwd(), name, candidate_profile=profile)
+                    print("\n" + format_application_status(status))
+                except (ApplicationWorkspaceError, LatexWorkflowError, OSError, ValueError) as exc:
+                    print(f"\nApplication {name}: inspection failed ({type(exc).__name__})")
+            if len(application_targets) > 10:
+                print("Additional applications omitted; use --application-status to inspect all.")
         thread_id = session_config["configurable"]["thread_id"]
         REGISTRY.begin_turn(thread_id)
         APPLICATION_TASK_REGISTRY.begin_turn(thread_id, write_audit)
@@ -431,6 +524,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                     write_audit=write_audit,
                     workspace_root=Path.cwd(),
                     local_debug=local_debug,
+                    application_targets=application_targets,
                 )
         except RejectedWriteRetryLoop as exc:
             # The graph may still be suspended on the old thread. Fail
@@ -446,6 +540,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             if local_debug is not None:
                 local_debug.end_turn("cancelled")
             print("Started a fresh conversation thread; prior thread remains abandoned.")
+            report_attempted_applications()
             return True
         except Exception as exc:
             # A model/provider error can leave partial state in the graph
@@ -468,6 +563,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                 local_debug.emit("turn.error", error_type=_ident(type(exc).__name__))
                 local_debug.end_turn("failed")
             print("Started a fresh conversation thread; the failed thread was abandoned.")
+            report_attempted_applications()
             return False
         first_turn = False
 
@@ -479,6 +575,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             print(
                 "\nCandidate profile-change request CANCELLED. No profile edit authorized."
             )
+            report_attempted_applications()
             return True
 
         if local_debug is not None:
@@ -498,6 +595,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             print(
                 "WARNING: Profile write authorization lacks a completed task receipt."
             )
+        report_attempted_applications()
         return True
 
     try:
