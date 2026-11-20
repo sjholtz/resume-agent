@@ -1,4 +1,4 @@
-"""Small local terminal UI for Deep Agents with scoped LangSmith tracing.
+"""Local terminal UI for Deep Agents with independent local debug and LangSmith controls.
 
 CLI defaults to tracing OFF, regardless of environment. `--trace` enables it
 only for this process's graph invocations and resumes. No global env mutation.
@@ -56,7 +56,11 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--debug",
         action="store_true",
-        help="Print newly generated message/tool diagnostics (off by default).",
+        help="Stream live local agent/subagent and tool events, without LangSmith.",
+    )
+    parser.add_argument(
+        "--debug-file", metavar="PATH",
+        help="Append local structured debug events to a 0600 JSONL file; implies --debug.",
     )
     parser.add_argument(
         "--base-resume", metavar="FILENAME|?", default=None,
@@ -95,6 +99,7 @@ def _prompt_approvals(
     write_audit: WriteDecisionAudit | None = None,
     input_fn=input,
     workspace_root: Path | None = None,
+    local_debug=None,
 ) -> dict[str, list[dict[str, str]]]:
     """Conservative review of a batched HumanInTheLoopMiddleware interrupt.
 
@@ -110,15 +115,28 @@ def _prompt_approvals(
     if not isinstance(review_configs, list) or len(review_configs) != len(actions):
         raise ValueError("Missing or mismatched HITL review_configs")
     decisions = []
+    def add_decision(action, decision):
+        decisions.append(decision)
+        if local_debug is not None:
+            from local_debug import _ident
+            local_debug.emit(
+                "approval.decision", tool=_ident(action.get("name")),
+                decision={"approve": "approved", "edit": "edited", "reject": "rejected"}.get(
+                    decision.get("type"), "rejected"),
+            )
+
     for i, action in enumerate(actions):
         if not isinstance(action, dict):
             raise TypeError("Unexpected HITL action format")
+        if local_debug is not None:
+            from local_debug import _ident
+            local_debug.emit("approval.request", tool=_ident(action.get("name")))
         if _is_profile_write(action, profile) and guard is not None and guard.cancelled:
             # Do NOT present this as requiring a fresh candidate approval.
             print(
                 "Blocked a repeated candidate-profile tool request after explicit cancellation."
             )
-            decisions.append(guard.block_retry())
+            add_decision(action, guard.block_retry())
             continue
         if (
             _is_profile_write(action, profile)
@@ -128,7 +146,7 @@ def _prompt_approvals(
             print(
                 "Blocked an additional profile write to content already approved this turn."
             )
-            decisions.append(guard.block_additional_write())
+            add_decision(action, guard.block_additional_write())
             continue
         # Fail closed before human approval for ordinary filesystem writes
         # aimed at an uninitialized or differently normalized job folder.
@@ -145,24 +163,16 @@ def _prompt_approvals(
                     print(reason)
                     if write_audit is not None:
                         write_audit.record(action, authorized=False)
-                    decisions.append(reject(reason))
+                    add_decision(action, reject(reason))
                     continue
         print("\nAction requiring human approval:")
         print(json.dumps(action, indent=2, ensure_ascii=False, default=str))
         if _is_profile_write(action, profile):
             cfg = review_configs[i]
             if cfg.get("action_name") != action.get("name"):
-                decisions.append(reject("HITL tool mismatch; no write authorized"))
+                add_decision(action, reject("HITL tool mismatch; no write authorized"))
                 continue
             try:
-                import os
-                import shutil
-                print(
-                    "[EDITOR DEBUG]",
-                    "VISUAL =", repr(os.environ.get("VISUAL")),
-                    "EDITOR =", repr(os.environ.get("EDITOR")),
-                    "nano =",shutil.which("nano"),
-                )
                 decision = review_profile_action(
                     action,
                     profile_prefix=profile,
@@ -196,7 +206,7 @@ def _prompt_approvals(
                     )
             if guard is not None:
                 guard.record(decision, action)
-            decisions.append(decision)
+            add_decision(action, decision)
             continue
         answer = input_fn("Approve this tool action? [y/N] ").strip().lower()
         authorized = answer in {"y", "yes"}
@@ -204,22 +214,16 @@ def _prompt_approvals(
             # Record the *human's* decision; do not trust the subagent report.
             write_audit.record(action, authorized=authorized)
         if authorized:
-            decisions.append(
-                {
-                    "type": "approve",
-                },
-            )
+            add_decision(action, {"type": "approve"})
         else:
-            decisions.append(
-                {
-                    "type": "reject",
-                    "message": (
-                        "User rejected this tool operation. Do not "
-                        "claim it succeeded or report the target file "
-                        "as created/modified."
-                    ),
-                },
-            )
+            add_decision(action, {
+                "type": "reject",
+                "message": (
+                    "User rejected this tool operation. Do not "
+                    "claim it succeeded or report the target file "
+                    "as created/modified."
+                ),
+            })
     return {
         "decisions": decisions,
     }
@@ -236,13 +240,27 @@ def _run_to_completion(
     write_audit: WriteDecisionAudit | None = None,
     input_fn=input,
     workspace_root: Path | None = None,
+    local_debug=None,
 ):
     """Invoke and safely resume batched HITL interrupts on the same \
     thread."""
-    result = graph.invoke(payload, config=config)
+    # Attach callbacks to every invocation AND interrupt resume. The debug
+    # handler is per user turn; unrelated LangSmith controls remain untouched.
+    run_config = config
+    if local_debug is not None:
+        from local_debug import make_callback_handler
+        run_config = dict(config)
+        existing = run_config.get("callbacks") or []
+        if not isinstance(existing, list):
+            raise TypeError("Unsupported callbacks config for local debug")
+        run_config["callbacks"] = [*existing, make_callback_handler(local_debug)]
+        local_debug.emit("graph.invoke", agent="orchestrator")
+    result = graph.invoke(payload, config=run_config)
     while True:
         pending = result.get("__interrupt__", ()) if isinstance(result, dict) else ()
         if not pending:
+            if local_debug is not None:
+                local_debug.emit("graph.returned", agent="orchestrator")
             return result
         if len(pending) != 1:
             raise RuntimeError(
@@ -250,6 +268,8 @@ def _run_to_completion(
                 "nothing was automatically approved."
             )
         value = getattr(pending[0], "value", None)
+        if local_debug is not None:
+            local_debug.emit("graph.interrupted", agent="orchestrator")
         if not isinstance(value, dict):
             raise TypeError("Unsupported HITL interrupt type; no action approved")
         response = _prompt_approvals(
@@ -261,10 +281,13 @@ def _run_to_completion(
             write_audit=write_audit,
             input_fn=input_fn,
             workspace_root=workspace_root,
+            local_debug=local_debug,
         )
         from langgraph.types import Command
 
-        result = graph.invoke(Command(resume=response), config=config)
+        if local_debug is not None:
+            local_debug.emit("graph.resumed", agent="orchestrator")
+        result = graph.invoke(Command(resume=response), config=run_config)
 
 
 def _show_response(result: Any) -> None:
@@ -356,10 +379,22 @@ def main(argv: Sequence[str] | None = None) -> int:
         },
     }
 
-    # LangGraph normally returns the full thread history on each
-    # invocation.  Track the already-seen prefix so --debug does not
-    # replay old messages.
-    debug_message_count = 0
+    local_debug = None
+    if args.debug or args.debug_file:
+        from local_debug import LocalDebugSink
+        if args.debug_file is not None:
+            # The CLI is outside the graph permission middleware: preserve
+            # candidate originals and source template immutability here too.
+            destination = Path(args.debug_file).expanduser().resolve(strict=False)
+            for protected in (Path.cwd() / "candidate", Path.cwd() / "templates"):
+                if destination.is_relative_to(protected.resolve(strict=False)):
+                    print("Debug log must not be stored under candidate/ or templates/", file=sys.stderr)
+                    return 2
+        try:
+            local_debug = LocalDebugSink(path=args.debug_file)
+        except OSError as exc:
+            print(f"Cannot create secure local debug log: {exc}", file=sys.stderr)
+            return 2
 
     print("Career Agent — use /quit or /exit (or Ctrl+C/Ctrl+D) to exit")
     if args.trace:
@@ -367,14 +402,16 @@ def main(argv: Sequence[str] | None = None) -> int:
     else:
         print("LangSmith tracing OFF")
 
-    def run_once(message: str) -> None:
-        nonlocal session_config, debug_message_count, first_turn
+    def run_once(message: str) -> bool:
+        nonlocal session_config, first_turn
         # The guard is fresh for EACH user turn, including all interrupt resumes.
         guard = ProfileCancelGuard()
         write_audit = WriteDecisionAudit()
         thread_id = session_config["configurable"]["thread_id"]
         REGISTRY.begin_turn(thread_id)
         APPLICATION_TASK_REGISTRY.begin_turn(thread_id, write_audit)
+        if local_debug is not None:
+            local_debug.start_turn()
         try:
             with tracing_context(enabled=args.trace, project_name=args.trace_project):
                 answer = _run_to_completion(
@@ -393,6 +430,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                     guard=guard,
                     write_audit=write_audit,
                     workspace_root=Path.cwd(),
+                    local_debug=local_debug,
                 )
         except RejectedWriteRetryLoop as exc:
             # The graph may still be suspended on the old thread. Fail
@@ -404,8 +442,9 @@ def main(argv: Sequence[str] | None = None) -> int:
                     "thread_id": str(uuid4()),
                 },
             }
-            debug_message_count = 0
             first_turn = True
+            if local_debug is not None:
+                local_debug.end_turn("cancelled")
             print("Started a fresh conversation thread; prior thread remains abandoned.")
             return True
         except Exception as exc:
@@ -423,63 +462,28 @@ def main(argv: Sequence[str] | None = None) -> int:
             session_config = {
                 "configurable": {"thread_id": str(uuid4())},
             }
-            debug_message_count = 0
             first_turn = True
+            if local_debug is not None:
+                from local_debug import _ident
+                local_debug.emit("turn.error", error_type=_ident(type(exc).__name__))
+                local_debug.end_turn("failed")
             print("Started a fresh conversation thread; the failed thread was abandoned.")
             return False
         first_turn = False
-        # --debug is opt-in. Avoid replaying LangGraph's accumulated
-        # --history.
-        messages = answer.get("messages", []) if isinstance(answer, dict) else []
-        if not isinstance(messages, list):
-            messages = []
-        if args.debug:
-            from langchain_core.messages import AIMessage, ToolMessage
-
-            start_at = (
-                debug_message_count if len(messages) >= debug_message_count else 0
-            )
-            for msg in messages[start_at:]:
-                content = getattr(msg, "content", "")
-                metadata = getattr(msg, "response_metadata", {})
-                kwargs = getattr(msg, "additional_kwargs", {})
-
-                print(
-                    "[DEBUG]",
-                    "type=", getattr(msg, "type", None),
-                    "content_length=", len(str(content)),
-                    "tool_calls=", len(getattr(msg, "tool_calls", []) or []),
-                    "reasoning_present=", bool(kwargs.get("reasoning_content")),
-                    "response_metadata=", metadata,
-                    file=sys.stderr,
-                )
-
-                if isinstance(msg, AIMessage):
-                    for call in msg.tool_calls:
-                        print(
-                            "[TOOL CALL]",
-                            call["name"],
-                            call["args"],
-                            file=sys.stderr,
-                        )
-                elif isinstance(msg, ToolMessage):
-                    print(
-                        "[TOOL RESULT]",
-                        msg.name,
-                        getattr(msg, "status", "unknown"),
-                        str(msg.content)[:200],
-                        file=sys.stderr,
-                    )
-        debug_message_count = len(messages)
 
         # Exactly ONE outcome per user turn, outside the debug loop.
         if guard.cancelled:
+            if local_debug is not None:
+                local_debug.end_turn("cancelled")
             # Ignore misleading model output after explicit cancellation.
             print(
                 "\nCandidate profile-change request CANCELLED. No profile edit authorized."
             )
             return True
 
+        if local_debug is not None:
+            # A graph return is not evidence that application artifacts exist.
+            local_debug.end_turn("returned_unverified")
         receipts = REGISTRY.completed(thread_id)
         if receipts:
             # Runtime-verified profile outcome, not an agent's narrative.
@@ -497,33 +501,36 @@ def main(argv: Sequence[str] | None = None) -> int:
         return True
 
     try:
-        if args.message is not None:
-            if not run_once(args.message):
-                return 1
-        else:
-            # Readline edits only the interactive chat input. Automatic history
-            # is disabled so HITL approvals are never collected as chat history.
-            line_editor = configure_readline()
-            while True:
-                message = input("\nYou> ").strip()
-                if message.lower() == "/edit":
-                    # Multiline prompts are composed in $VISUAL/$EDITOR.
-                    # An empty or cancelled editor session submits nothing.
-                    message = edit_chat_message()
-                    if message is None:
+        try:
+            if args.message is not None:
+                if not run_once(args.message):
+                    return 1
+            else:
+                # Readline edits only the interactive chat input. Automatic history
+                # is disabled so HITL approvals are never collected as chat history.
+                line_editor = configure_readline()
+                while True:
+                    message = input("\nYou> ").strip()
+                    if message.lower() == "/edit":
+                        # Multiline prompts are composed in $VISUAL/$EDITOR.
+                        # An empty or cancelled editor session submits nothing.
+                        message = edit_chat_message()
+                        if message is None:
+                            continue
+                    else:
+                        if message.lower() in {"quit", "exit", "/quit", "/exit"}:
+                            break
+                        if message:
+                            remember_chat_message(line_editor, message)
+                    if not message.strip():
                         continue
-                else:
-                    if message.lower() in {"quit", "exit", "/quit", "/exit"}:
-                        break
-                    if message:
-                        remember_chat_message(line_editor, message)
-                if not message.strip():
-                    continue
-                run_once(message)
-    except (KeyboardInterrupt, EOFError):
-        print("\nExiting; no pending tool actions were automatically approved.")
-    return 0
-
+                    run_once(message)
+        except (KeyboardInterrupt, EOFError):
+            print("\nExiting; no pending tool actions were automatically approved.")
+        return 0
+    finally:
+        if local_debug is not None:
+            local_debug.close()
 
 if __name__ == "__main__":
     raise SystemExit(main())
