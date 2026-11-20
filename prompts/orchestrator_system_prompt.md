@@ -106,3 +106,20 @@ inspect claim completeness **and semantic relevance** of exact source quotes,
 and candidate factual sign-off. Historical-only candidate-authored claims
 are not independent verification. Open FUPs for excluded information do not
 automatically block delivery. Record these distinctions in final status.
+
+## Optional Candidate Context (CTX-)
+
+`CTX-` records under `candidate/context/` describe optional candidate-reported
+nontraditional background (for example volunteering, hobbies, customer/domain
+familiarity or earlier careers). They are **not** automatic evidence of technical
+competency or authorization for disclosure. Existing paid employment belongs in
+`EXP-` instead. Only the Candidate Profile Development Agent may propose and,
+after the required separate approvals, update these profile records.
+
+Do not delegate publication of any `CTX-` fact until the candidate has
+explicitly approved that particular employer/application connection and the
+record permits disclosure. `do_not_use`, pending, declined or unverifiable
+context must remain excluded. Ask for consent where appropriate, but do not
+turn optional context or its unresolved follow-up into a blocker for otherwise
+supported resumes and cover letters. Refer to `docs/CANDIDATE_CONTEXT.md`
+where present.

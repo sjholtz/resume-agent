@@ -764,3 +764,13 @@ submission-ready: both independent reviewers must validate semantic support
 and inventory completeness, and the candidate must confirm facts. Preserve
 nonblocking treatment of excluded unresolved FUPs. Never claim that exact
 quote matching proves a person's accomplishments.
+
+## Optional Candidate Context (CTX-) Coordination
+
+Use candidate `CTX-` records only for optional, relevant background, never as
+a proxy for verified engineering experience. Ask the Candidate Profile
+Development Agent to handle any proposed context changes; preserve its
+separate candidate-content and tool-execution approvals. A company-specific
+connection requires explicit consent and traceable evidence before publishing.
+Never disclose `do_not_use`, pending, declined or unsupported context;
+nonessential omissions are nonblocking. See `docs/CANDIDATE_CONTEXT.md`.

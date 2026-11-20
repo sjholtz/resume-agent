@@ -35,3 +35,14 @@ experience. If the report is missing, stale or blocked, do not recommend
 submission. An excluded, unresolved FUP is nonblocking unless its unsupported
 claim actually appears in the resume or cover letter. All reviewers remain
 strictly read-only.
+
+## Optional Candidate Context (CTX-) Review
+
+`CTX-` material under `candidate/context/` may describe hobbies, earlier
+experience or product familiarity, but it does **not** independently establish
+technical implementation skills or measurable achievements. Verify any actual
+connection against relevant evidence, candidate-reported scope, and explicit
+employer/application-specific disclosure approval. Exclude `do_not_use`,
+pending, declined or unsupported context. Paid roles belong under `EXP-`.
+Only the Candidate Profile Development Agent may propose changes to these records under separate approvals. Keep your review read-only, and do not request
+optional context as an automatic prerequisite for submission.

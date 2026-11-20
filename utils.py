@@ -36,6 +36,23 @@ def load_system_prompt(role: str) -> str:
     content = prompt_path.read_text(encoding="utf-8").strip()
     if not content:
         raise ValueError(f"Empty system prompt: {prompt_path}")
+    if role == "candidate":
+        from profile_content_quality import local_date_iso
+
+        # Compute at load time, using RESUME_AGENT_TIMEZONE if configured.
+        # Do not modify the saved system prompt or candidate profile.
+        content += (
+            "\n\n## Runtime candidate-profile content safety\n\n"
+            f"Today's local date: {local_date_iso()}\n"
+            "Never write bracketed placeholders such as [Current Date], "
+            "[YYYY-MM-DD], [TBD], or [insert project] into new or "
+            "replaced authoritative candidate-profile content. "
+            "For every newly inserted or replaced Last Updated field, "
+            "use exactly today's local date in YYYY-MM-DD format; "
+            "preserve unrelated pre-existing placeholder lines without "
+            "silently modifying them. Both candidate-content consent and "
+            "separate tool-execution approval remain mandatory.\n"
+        )
     return content
 
 

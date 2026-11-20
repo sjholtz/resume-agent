@@ -23,6 +23,7 @@ from typing import Any
 
 from candidate_context_records import ContextRecordError, validate_context_profile_write
 from profile_conflicts import newly_introduced_profile_conflicts
+from profile_content_quality import profile_content_issues
 from profile_review import (
     _checked_path,
     _project,
@@ -113,6 +114,11 @@ class ProfileReceiptRegistry:
         before = _text(baseline)
         original_after = _project(action, None if baseline is None else before)
         revised_after = _project(approved, None if baseline is None else before)
+        # Defense in depth: authorization/receipt calls may bypass interactive review.
+        # Validate the approved projection, not just the originally proposed edit.
+        issues = profile_content_issues(None if baseline is None else before, revised_after)
+        if issues:
+            raise ValueError("Authoritative profile content check failed: " + "; ".join(issues))
         try:
             validate_context_profile_write(
                 str(original_path), revised_after, candidate_prefix=profile_prefix

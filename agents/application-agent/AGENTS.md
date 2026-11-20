@@ -1424,3 +1424,14 @@ After **every** approved document edit or changed source record, redo
 `check_claim_audit` before final handoff. Never report an old audit as
 current, never treat a tool response as candidate factual approval, and
 include unresolved factual concerns in the final delivery report.
+
+## Optional Candidate Context (CTX-) in Applications
+
+The optional `candidate/context/CTX-NNNN.json` library is read-only. It is
+not proof of technical achievement and must not become a job-specific talking
+point without an evidenced candidate/role connection and explicit candidate
+approval of disclosure for that employer/application. Exclude `do_not_use`,
+pending, declined and unverified records. Refer context changes to the
+Candidate Profile Development Agent; do not modify `CTX-` or its consent
+records. Keep unresolved optional context from blocking supported application
+drafting. Paid employment belongs in `EXP-`.

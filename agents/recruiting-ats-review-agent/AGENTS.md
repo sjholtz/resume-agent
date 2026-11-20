@@ -1267,3 +1267,13 @@ review finding. Do not edit audit reports, application drafts or candidate
 records; route corrections through the Application Development Agent.
 Exclude unresolved FUP assertions, but never block solely because a FUP
 exists. Recommend candidate factual sign-off before submission.
+
+## Optional Candidate Context (CTX-) Quality Gate
+
+Check that any `CTX-` candidate context used in a resume or cover letter has
+a genuine, evidence-supported relationship to the opening and explicit
+employer-specific disclosure authorization. Context is not interchangeable
+with `EXP-` work history or verified technical qualifications. Flag
+`do_not_use`, declined, pending, speculative and unapproved disclosures as
+critical; do not propose including optional context to inflate qualifications.
+Keep the review read-only and optional omissions nonblocking.

@@ -32,6 +32,7 @@ from typing import Any
 
 from candidate_context_records import ContextRecordError, validate_context_profile_write
 from profile_conflicts import newly_introduced_profile_conflicts
+from profile_content_quality import profile_content_issues
 
 MAX_CONTENT_BYTES = 1_000_000
 MAX_REVISIONS = 5
@@ -494,7 +495,10 @@ def review_profile_action(
                 output(f"Revision cancelled: {exc}")
             revisions += 1
             continue
-        issues = newly_introduced_profile_conflicts(before, after)
+        # Reject unresolved new placeholders/dates before either HITL approval gate.
+        # Recheck each candidate revision, without rejecting unrelated legacy text.
+        issues = profile_content_issues(before, after)
+        issues.extend(newly_introduced_profile_conflicts(before, after))
         try:
             validate_context_profile_write(
                 str(path), after, candidate_prefix=profile_prefix

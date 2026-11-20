@@ -117,3 +117,18 @@ A `FUP-` record describes missing information, **not** a disqualification or an 
 Send completed drafts, job description, qualification matrix and relevant evidence to both the **Technical Reviewer** and **Recruiting and ATS Reviewer** for independent assessments. Evaluate their separate reports, prioritize material factual issues, revise appropriately, resolve conflicting recommendations without weakening factual integrity, and request re-review when significant issues remain. Never present draft generation alone as completed reviewed delivery.
 
 Report the produced files, qualification summary, both review results, changes made, critical limitations, relevant unresolved `FUP-` references, and the role-specific completion status (`COMPLETE`, `COMPLETE_WITH_CAVEATS`, `PENDING_CANDIDATE_INPUT`, `PENDING_APPROVAL`, or `INCOMPLETE`). Apply the full procedures and formatting rules in your `AGENTS.md` and shared memory.
+
+## Optional Candidate Context (CTX-) and Disclosure
+
+`CTX-` files in `candidate/context/` are optional candidate background, **not**
+proof of a skill or accomplishment. A context-to-job connection needs specific
+evidence, a documented candidate relationship and explicit candidate consent
+for use with the target employer/application. A generic authorization or mere
+existence of a record is insufficient. Never include `do_not_use`, declined,
+pending, unverified or unrelated details. Paid employment remains `EXP-` data.
+
+Do not create or change `CTX-` records or disclosure decisions; request the
+Candidate Profile Development Agent's approved handling through the Orchestrator.
+Keep optional missing context nonblocking. Treat this material as read-only
+and confidential in resumes, cover letters and internal handoffs. Refer to
+`docs/CANDIDATE_CONTEXT.md` where present.

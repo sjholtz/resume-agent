@@ -61,6 +61,7 @@ Existing record categories in the specialist memory files:
 | `CERT-` | Certifications or credentials |
 | `EVID-` | Supporting evidence or artifacts |
 | `FUP-` | Follow-up questions, investigations and incomplete tasks |
+| `CTX-` | Optional nontraditional candidate context, subject to separate disclosure approval |
 
 IDs are stable and should not be renumbered merely because records are added. Include applicable IDs in internal qualification matrices, findings and handoffs. Reference related records rather than duplicating them unnecessarily. `FUP-` is **not** a qualification category and **not** evidence of a claim. Keep internal IDs out of candidate-facing resume bullets and cover letters unless explicitly requested for a special working artifact.
 
@@ -151,3 +152,19 @@ Ask focused questions rather than interviewing the candidate repetitively. Do no
 ## 10. Scope of This Memory File
 
 This is a **shared baseline**. Consult the agent-specific `AGENTS.md` for detailed methods, scoring dimensions, report sections, record schemas, file conventions and role-specific restrictions; consult skills for specialized techniques. Do not treat examples in any memory file as actual facts about the candidate or a particular employer.
+
+## Optional Candidate Context (CTX-) — Consent and Role Boundaries
+
+`CTX-` identifies optional candidate-reported nontraditional context stored
+under `candidate/context/CTX-NNNN.json`. Such material may concern hobbies,
+volunteering, prior nontechnical work, community involvement or useful domain
+familiarity; an actual paid role belongs to `EXP-`. Context is not itself
+verified technical experience or permission to publish. Require a clear
+candidate relationship, supporting evidence, and a separately approved
+employer/application-specific connection before any disclosure. A `do_not_use`,
+pending, declined, unverified or unrelated context record is excluded.
+Only the Candidate Profile Development Agent can propose profile/context
+modifications through existing two-stage HITL approvals. All other agents are
+read-only for `CTX-` records and consent decisions. Optional context must not
+block a supported application. Respect the full schemas and workflow in
+`docs/CANDIDATE_CONTEXT.md` where available.

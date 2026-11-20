@@ -1443,3 +1443,13 @@ review finding. Do not edit audit reports, application drafts or candidate
 records; route corrections through the Application Development Agent.
 Exclude unresolved FUP assertions, but never block solely because a FUP
 exists. Recommend candidate factual sign-off before submission.
+
+## Optional Candidate Context (CTX-) Technical Gate
+
+Optional `CTX-` background must not be converted into claims of hands-on
+implementation, production deployment, credentials or measured outcomes.
+Assess the actual evidence and candidate relationship if context is used;
+ensure employer-specific candidate disclosure approval and reject `do_not_use`,
+pending, declined or unsupported exposure. Treat candidate context as read-only;
+refer profile corrections to the Candidate Profile Development Agent and do
+not block otherwise factual drafts over omitted optional context.
