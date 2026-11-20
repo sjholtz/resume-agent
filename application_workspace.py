@@ -7,11 +7,12 @@ ONLY be invoked through the approval-interrupted initialize_application tool
 
 from __future__ import annotations
 
+from dataclasses import dataclass
+from typing import Callable
+from datetime import date, datetime, timezone
+from pathlib import Path, PurePosixPath
 import re
 import unicodedata
-from dataclasses import dataclass
-from datetime import UTC, date, datetime
-from pathlib import Path, PurePosixPath
 from urllib.parse import urlsplit
 
 
@@ -20,22 +21,12 @@ class ApplicationWorkspaceError(ValueError):
 
 
 def _slug(value: str, *, field: str) -> str:
-    if (
-        not isinstance(value, str)
-        or not value.strip()
-        or any(c in value for c in "/\\\x00")
-    ):
-        raise ApplicationWorkspaceError(
-            f"{field} must be nonempty and contain no path separators"
-        )
-    ascii_value = (
-        unicodedata.normalize("NFKD", value).encode("ascii", "ignore").decode("ascii")
-    )
+    if not isinstance(value, str) or not value.strip() or any(c in value for c in "/\\\x00"):
+        raise ApplicationWorkspaceError(f"{field} must be nonempty and contain no path separators")
+    ascii_value = unicodedata.normalize("NFKD", value).encode("ascii", "ignore").decode("ascii")
     result = re.sub(r"[^a-z0-9]+", "_", ascii_value.lower()).strip("_")
     if not result or len(result) > 64:
-        raise ApplicationWorkspaceError(
-            f"{field} produces an empty or overly long path component"
-        )
+        raise ApplicationWorkspaceError(f"{field} produces an empty or overly long path component")
     return result
 
 
@@ -45,9 +36,7 @@ def _date(value: str) -> str:
     try:
         parsed = date.fromisoformat(value)
     except ValueError as exc:
-        raise ApplicationWorkspaceError(
-            "application_date must be a valid YYYY-MM-DD date"
-        ) from exc
+        raise ApplicationWorkspaceError("application_date must be a valid YYYY-MM-DD date") from exc
     if parsed.isoformat() != value:
         raise ApplicationWorkspaceError("application_date must be YYYY-MM-DD")
     return value
@@ -55,15 +44,9 @@ def _date(value: str) -> str:
 
 def _metadata(value: str, *, field: str, required: bool = False) -> str:
     if not isinstance(value, str) or (required and not value.strip()):
-        raise ApplicationWorkspaceError(
-            f"{field} must be a nonempty string"
-            if required
-            else f"{field} must be a string"
-        )
+        raise ApplicationWorkspaceError(f"{field} must be a nonempty string" if required else f"{field} must be a string")
     if any(ord(c) < 32 or ord(c) == 127 for c in value) or len(value) > 500:
-        raise ApplicationWorkspaceError(
-            f"{field} must be single-line and <= 500 characters"
-        )
+        raise ApplicationWorkspaceError(f"{field} must be single-line and <= 500 characters")
     return value.strip()
 
 
@@ -74,16 +57,18 @@ def _url(value: str) -> str:
             parts = urlsplit(value)
         except ValueError as exc:
             raise ApplicationWorkspaceError("Invalid source URL") from exc
-        if (
-            parts.scheme not in {"https", "http"}
-            or not parts.netloc
-            or parts.username
-            or parts.password
-        ):
-            raise ApplicationWorkspaceError(
-                "source URL must be an HTTP(S) URL without credentials"
-            )
+        if parts.scheme not in {"https", "http"} or not parts.netloc or parts.username or parts.password:
+            raise ApplicationWorkspaceError("source URL must be an HTTP(S) URL without credentials")
     return value
+
+
+@dataclass(frozen=True)
+class RetrievedJobDescription:
+    """Full text plus provenance returned by the approved URL fetch path."""
+    text: str
+    final_url: str
+    retrieved_at: str
+    extraction: str
 
 
 @dataclass(frozen=True)
@@ -98,9 +83,7 @@ class ApplicationPaths:
     cover_letter: str
 
 
-def canonical_paths(
-    company_name: str, position_title: str, application_date: str
-) -> ApplicationPaths:
+def canonical_paths(company_name: str, position_title: str, application_date: str) -> ApplicationPaths:
     """Construct virtual paths; does not access the host filesystem."""
     company = _slug(company_name, field="company_name")
     position = _slug(position_title, field="position_title")
@@ -119,7 +102,7 @@ def canonical_paths(
     )
 
 
-def _record(title: str, *, text: str, source: str, url: str, captured: str) -> str:
+def _record(title: str, *, text: str, source: str, url: str, captured: str, retrieved: RetrievedJobDescription | None = None) -> str:
     if not isinstance(text, str):
         raise ApplicationWorkspaceError("source text must be a string")
     if not isinstance(source, str):
@@ -129,37 +112,33 @@ def _record(title: str, *, text: str, source: str, url: str, captured: str) -> s
         source = _metadata(source, field=f"{title} source", required=True)
     else:
         if source.strip() or url:
-            raise ApplicationWorkspaceError(
-                f"{title}: cannot claim a source without source content"
-            )
+            raise ApplicationWorkspaceError(f"{title}: cannot claim a source without source content")
         source = "none"
     url = _url(url)
-    # The sentinel marks original text, distinct from the derived metadata.
+    # The sentinel marks source text, distinct from the derived metadata.
+    fetch_metadata = (
+        f"- Resolved URL: {retrieved.final_url}\n"
+        f"- Retrieved at (UTC): {retrieved.retrieved_at}\n"
+        f"- Extraction method: {retrieved.extraction}\n"
+        if retrieved is not None else ""
+    )
     return (
         f"# {title}\n\n"
         f"- Status: {'captured' if present else 'not_provided'}\n"
         f"- Source: {source}\n"
         f"- Original URL: {url or 'not_provided'}\n"
+        + fetch_metadata +
         f"- Recorded on (UTC): {captured}\n\n"
         "## Source content\n\n"
-        + (
-            text.rstrip("\n") + "\n"
-            if present
-            else "Not provided. Do not infer missing facts.\n"
-        )
+        + (text.rstrip("\n") + "\n" if present else "Not provided. Do not infer missing facts.\n")
     )
 
 
 def _existing_matches(existing: str, new: str) -> bool:
     """Ignore recording timestamp for safe, idempotent replays."""
-
     def normalized(value: str) -> str:
-        return re.sub(
-            r"(?m)^- Recorded on \(UTC\): .*?$",
-            "- Recorded on (UTC): <existing>",
-            value,
-        )
-
+        value = re.sub(r"(?m)^- Recorded on \(UTC\): .*?$", "- Recorded on (UTC): <existing>", value)
+        return re.sub(r"(?m)^- Retrieved at \(UTC\): .*?$", "- Retrieved at (UTC): <existing>", value)
     return normalized(existing) == normalized(new)
 
 
@@ -167,16 +146,12 @@ def _no_symlink_components(root: Path, dest: Path) -> None:
     try:
         relative = dest.relative_to(root)
     except ValueError as exc:
-        raise ApplicationWorkspaceError(
-            "Destination escapes the configured workspace"
-        ) from exc
+        raise ApplicationWorkspaceError("Destination escapes the configured workspace") from exc
     current = root
     for part in relative.parts:
         current = current / part
         if current.is_symlink():
-            raise ApplicationWorkspaceError(
-                f"Refusing symlink in application path: {current}"
-            )
+            raise ApplicationWorkspaceError(f"Refusing symlink in application path: {current}")
 
 
 def _physical(root: Path, virtual: str) -> Path:
@@ -194,8 +169,8 @@ def initialize_application(
     company_name: str,
     position_title: str,
     application_date: str,
-    job_description_text: str,
-    job_description_source: str,
+    job_description_text: str = "",
+    job_description_source: str = "",
     job_description_url: str = "",
     company_information_text: str = "",
     company_information_source: str = "",
@@ -204,6 +179,7 @@ def initialize_application(
     company_additional_source: str = "",
     position_additional_text: str = "",
     position_additional_source: str = "",
+    _fetch_job_description: Callable[[str], RetrievedJobDescription] | None = None,
 ) -> dict[str, object]:
     """Create canonical directories and source files without overwriting records.
 
@@ -214,57 +190,67 @@ def initialize_application(
     paths = canonical_paths(company_name, position_title, application_date)
     root = Path(workspace_root)
     if not root.is_dir() or root.is_symlink():
-        raise ApplicationWorkspaceError(
-            "Configured workspace root must be an existing non-symlink directory"
-        )
+        raise ApplicationWorkspaceError("Configured workspace root must be an existing non-symlink directory")
     root = root.resolve(strict=True)
-    if not isinstance(job_description_text, str) or not job_description_text.strip():
-        raise ApplicationWorkspaceError(
-            "Nonempty original job_description_text is required before initialization"
+    if not isinstance(job_description_text, str):
+        raise ApplicationWorkspaceError("job_description_text must be a string")
+    url = _url(job_description_url)
+    if not job_description_text.strip() and not url:
+        raise ApplicationWorkspaceError("Provide job_description_text or job_description_url before initialization")
+
+    # URL-only retries reuse an already approved, captured snapshot from the
+    # same URL, even if the live posting has since disappeared. Never replace
+    # or silently refresh an existing record; explicit changes require review.
+    job_path = _physical(root, paths.job_description)
+    existing_snapshot = False
+    if not job_description_text.strip() and url and job_path.is_file():
+        prior = job_path.read_text(encoding="utf-8")
+        existing_snapshot = (
+            "- Status: captured\n" in prior
+            and f"- Original URL: {url}\n" in prior
+            and "## Source content\n\n" in prior
+            and bool(prior.partition("## Source content\n\n")[2].strip())
         )
+        if not existing_snapshot:
+            raise ApplicationWorkspaceError(
+                "Existing job description cannot be verified for this URL; manual review required"
+            )
+
+    retrieved: RetrievedJobDescription | None = None
+    if not job_description_text.strip() and not existing_snapshot:
+        if _fetch_job_description is None:
+            from tools.job_description_snapshot import fetch_job_description
+            _fetch_job_description = fetch_job_description
+        retrieved = _fetch_job_description(url)
+        if not isinstance(retrieved, RetrievedJobDescription) or not retrieved.text.strip():
+            raise ApplicationWorkspaceError("URL retrieval returned no genuine job-description text")
+        # A redirect's destination is confirmed by the existing safe downloader.
+        _url(retrieved.final_url)
+        job_description_text = retrieved.text
+        job_description_source = "Public webpage (retrieved by initializer)"
     # Do not claim the source date was an external retrieval date; this is only
     # the date our source snapshot was recorded.
-    captured = datetime.now(UTC).date().isoformat()
+    captured = datetime.now(timezone.utc).date().isoformat()
     specs = [
-        (
-            paths.job_description,
-            "Job Description",
-            job_description_text,
-            job_description_source,
-            job_description_url,
-        ),
-        (
-            paths.company_information,
-            "Company Information",
-            company_information_text,
-            company_information_source,
-            company_information_url,
-        ),
-        (
-            paths.company_additional,
-            "Additional Company Information",
-            company_additional_text,
-            company_additional_source,
-            "",
-        ),
-        (
-            paths.position_additional,
-            "Additional Position Information",
-            position_additional_text,
-            position_additional_source,
-            "",
-        ),
+        (paths.job_description, "Job Description", job_description_text, job_description_source, job_description_url),
+        (paths.company_information, "Company Information", company_information_text, company_information_source, company_information_url),
+        (paths.company_additional, "Additional Company Information", company_additional_text, company_additional_source, ""),
+        (paths.position_additional, "Additional Position Information", position_additional_text, position_additional_source, ""),
     ]
     writes: list[tuple[Path, str, str]] = []
     preserved: list[str] = []
     for virtual, title, value, source, url in specs:
-        content = _record(title, text=value, source=source, url=url, captured=captured)
+        if virtual == paths.job_description and existing_snapshot:
+            preserved.append(virtual)
+            continue
+        content = _record(
+            title, text=value, source=source, url=url, captured=captured,
+            retrieved=retrieved if virtual == paths.job_description else None,
+        )
         dest = _physical(root, virtual)
         if dest.exists():
             if not dest.is_file():
-                raise ApplicationWorkspaceError(
-                    f"Source record is not a regular file: {virtual}"
-                )
+                raise ApplicationWorkspaceError(f"Source record is not a regular file: {virtual}")
             current = dest.read_text(encoding="utf-8")
             if not value.strip() or _existing_matches(current, content):
                 preserved.append(virtual)
@@ -291,5 +277,7 @@ def initialize_application(
         "created": created,
         "preserved_existing": preserved,
         "job_description_status": "captured",
+        "job_description_input": "existing_snapshot" if existing_snapshot else ("url" if retrieved else "text"),
+        "job_description_extraction": retrieved.extraction if retrieved else None,
         "note": "Read the written source records before drafting. No templates or candidate files were changed.",
     }

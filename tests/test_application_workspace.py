@@ -142,9 +142,9 @@ class ApplicationWorkspaceTests(unittest.TestCase):
 
     def test_missing_job_description_fails_closed(self):
         with self.assertRaisesRegex(
-            ApplicationWorkspaceError, "Nonempty original job_description_text"
+            ApplicationWorkspaceError, "job_description_text or job_description_url"
         ):
-            self.init(job_description_text=" \n")
+            self.init(job_description_text=" \n", job_description_url="")
         self.assertFalse((self.root / "applications").exists())
 
     def test_invalid_names_dates_and_source_metadata(self):

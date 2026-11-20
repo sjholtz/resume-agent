@@ -123,6 +123,25 @@ def make_permissions(role: Role, *, candidate_profile: str | None = None):
                 paths=_subtree("/workspace/templates"),
                 mode="deny",
             ),
+            # Only initialize_application may create or preserve source records.
+            FilesystemPermission(
+                operations=["write"],
+                paths=[
+                    "/workspace/applications/*/company_inf.md",
+                    "/workspace/applications/*/additional_inf.md",
+                    f"/workspace/applications/*/{_DATE_COMPONENT}/job_description.md",
+                    f"/workspace/applications/*/{_DATE_COMPONENT}/additional_inf.md",
+                ],
+                mode="deny",
+            ),
+            # Reject a common alternative company slug at the permission layer.
+            # The CLI also rejects case changes, invalid slugs, uninitialized
+            # jobs, and incorrect position directories before asking approval.
+            FilesystemPermission(
+                operations=["write"],
+                paths=["/workspace/applications/*-*/**"],
+                mode="deny",
+            ),
             # Only the dedicated, HITL-interrupted LaTeX tools may create
             # template provenance and build artifacts. Otherwise an agent
             # could forge validation.json or alter a manifest after staging.

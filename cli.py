@@ -19,6 +19,7 @@ from typing import Any
 from uuid import uuid4
 
 from application_task_status import REGISTRY as APPLICATION_TASK_REGISTRY
+from application_write_guard import ApplicationWriteError, is_application_path, require_initialized_document_path
 from interactive_input import (
     configure_readline,
     edit_chat_message,
@@ -93,6 +94,7 @@ def _prompt_approvals(
     thread_id: str = "",
     write_audit: WriteDecisionAudit | None = None,
     input_fn=input,
+    workspace_root: Path | None = None,
 ) -> dict[str, list[dict[str, str]]]:
     """Conservative review of a batched HumanInTheLoopMiddleware interrupt.
 
@@ -128,6 +130,23 @@ def _prompt_approvals(
             )
             decisions.append(guard.block_additional_write())
             continue
+        # Fail closed before human approval for ordinary filesystem writes
+        # aimed at an uninitialized or differently normalized job folder.
+        if action.get("name") in {"write_file", "edit_file", "delete"}:
+            args = action.get("args") or {}
+            path = args.get("file_path") if isinstance(args, dict) else None
+            if is_application_path(path):
+                try:
+                    require_initialized_document_path(
+                        workspace_root if workspace_root is not None else Path.cwd(), path
+                    )
+                except (ApplicationWriteError, OSError) as exc:
+                    reason = f"Application write rejected before approval: {exc}"
+                    print(reason)
+                    if write_audit is not None:
+                        write_audit.record(action, authorized=False)
+                    decisions.append(reject(reason))
+                    continue
         print("\nAction requiring human approval:")
         print(json.dumps(action, indent=2, ensure_ascii=False, default=str))
         if _is_profile_write(action, profile):
@@ -216,6 +235,7 @@ def _run_to_completion(
     guard: ProfileCancelGuard | None = None,
     write_audit: WriteDecisionAudit | None = None,
     input_fn=input,
+    workspace_root: Path | None = None,
 ):
     """Invoke and safely resume batched HITL interrupts on the same \
     thread."""
@@ -240,6 +260,7 @@ def _run_to_completion(
             thread_id=config["configurable"]["thread_id"],
             write_audit=write_audit,
             input_fn=input_fn,
+            workspace_root=workspace_root,
         )
         from langgraph.types import Command
 
@@ -371,6 +392,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                     original_request=message,
                     guard=guard,
                     write_audit=write_audit,
+                    workspace_root=Path.cwd(),
                 )
         except RejectedWriteRetryLoop as exc:
             # The graph may still be suspended on the old thread. Fail

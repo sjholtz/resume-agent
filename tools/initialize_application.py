@@ -22,8 +22,8 @@ def make_initialize_application_tool(*, workspace_root: Path):
         company_name: str,
         position_title: str,
         application_date: str,
-        job_description_text: str,
-        job_description_source: str,
+        job_description_text: str = "",
+        job_description_source: str = "",
         job_description_url: str = "",
         company_information_text: str = "",
         company_information_source: str = "",
@@ -35,10 +35,13 @@ def make_initialize_application_tool(*, workspace_root: Path):
     ) -> str:
         """After explicit human approval, initialize job folder and source records.
 
-        Requires a complete, genuine job-description text plus its source label
-        (e.g., `candidate-supplied posting` or an actually visited URL). Never
-        invent missing source text. Company/extra texts are optional and are
-        recorded as `not_provided` when absent. Preserves existing records.
+        Accept either a job_description_url ALONE (fetch public HTML and save
+        its complete extracted text) OR genuine job_description_text with a
+        truthful source label. URL retrieval happens only after THIS tool's
+        explicit human approval; its HTTPS/public-site checks are inherited
+        from web_fetch. A failed fetch never creates files. No JavaScript,
+        logins or PDFs. Company/extra texts are optional, and existing
+        approved source snapshots are preserved rather than overwritten.
         """
         try:
             outcome = initialize_application(
@@ -58,12 +61,7 @@ def make_initialize_application_tool(*, workspace_root: Path):
                 position_additional_source=position_additional_source,
             )
             return json.dumps({"status": "ok", **outcome}, sort_keys=True)
-        except (
-            ApplicationWorkspaceError,
-            FileExistsError,
-            OSError,
-            UnicodeError,
-        ) as exc:
+        except (ApplicationWorkspaceError, FileExistsError, OSError, UnicodeError) as exc:
             return json.dumps({"status": "error", "message": str(exc)})
 
     return initialize_application_tool
